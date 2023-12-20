@@ -17,7 +17,6 @@ dma: .fill 2
 ; --- Initialisation code ---------------------------------------------------
 
 ; Called once on startup and then never again.
-; TODO: figure out a way to discard this after startup.
 
 zproc _start
     ; Print banner.
@@ -29,151 +28,82 @@ zproc _start
         dey
     zuntil_eq
 
-    ; Figure out the start and end of the TPA.
-
-    ;lda #$83
-    ;jsr OSBYTE
-    ;sty mem_base
-
-    ;lda #$84
-    ;ldy #0
-    ;jsr OSBYTE
-    ;cpy #$4
-    ;zif_eq              ; Tube present?
-    ;    ldy #$f8        ; override mem_end
-    ;    lda #$ee
-    ;    sta zp_end      ; override zp_end
-    ;zendif
-    ;sty mem_end
+    ; Initialize USB-disk interface
 
     jsr ch376_init
 	
     ; Load the BDOS image.
 
-;    lda mem_base
-;    sta bdos_osfile_block + 3
-;    lda #$ff
     ldx #<bdos_filename
     ldy #>bdos_filename
     jsr ch376_load_block
-	;jsr OSFILE			
 
     ; Relocate it.
 
-    lda mem_base+0
+    lda mem_base
+
     ldx zp_base
     jsr entry_RELOCATE
 
-    ; Close any existing files.
-
-    ;lda #0
-    ;tay
-    ;jsr OSFIND
-
-    ; Open the file system image file.
-
-    ;lda #$c0            ; open file for r/w
-
-    ;jsr OSFIND
-    ;sta filehandle
-	ldx #<cpmfs_filename	
+    ; Open CPMFS	
+    ldx #<cpmfs_filename	
 	ldy #>cpmfs_filename
 	jsr ch376_open_persistent
 
-    ; Setup pointer for video memory
-    ;lda #<VRAM_base
-    ;sta vidpointer+0
-    ;lda #>VRAM_base
-    ;sta vidpointer+1 
-	
+    ; Avoid junk character in buffer at startup
+    lda #$00
+    sta pending_key
+
     ; Compute the entry address and jump.
 
-    lda mem_base+0
+    lda mem_base
     pha
     lda #COMHDR_ENTRY-1 ; rts addresses are one before the target
     pha
 
     lda #<biosentry
     ldx #>biosentry
-    ;jmp __TPA0_START__ + COMHDR_ENTRY    
     rts                 ; indirect jump
 zendproc
-
-;bdos_osfile_block:
-;    .word bdos_filename ; filename
-;    .word 0             ; load address low
-;   .word 0             ; load address high
-;    .word 0             ; exec address low
-;    .word 0             ; exec address high
-;    .word 0             ; length low
-;    .word 0             ; length high
-;    .word 0             ; attrs low
-;    .word 0             ; attrs high
     
-bdos_filename: 
+bdos_filename:
     .ascii "BDOS"
     .byte 00
 
 banner: ; reversed!
     .byte 13, 10
     .ascii "---------------------- X-MIAD rof 56-M/PC ----------------------"
-    .byte 13, 10
 banner_end:
 
 cpmfs_filename:
     .ascii "CPMFS"
     .byte 00
 
-filler:
-    .ascii "xx"
-; Stuff above of here must be 0x80 long.
-; --- BIOS entrypoints ------------------------------------------------------
+; Stuff above of here must be 0x80 long, currently 0x82
 
-; BIOS entry point. Parameter is in XA, function in Y.
-;biosentry:
-;    pha
-;    lda biostable_lo, y
-;    sta ptr+0
-;    lda biostable_hi, y
-;    sta ptr+1
-;   pla
-;    jmp (ptr)
-
-;biostable_lo:
-;    .byte entry_CONST@mos16lo
-;    .byte entry_CONIN@mos16lo
-;   .byte entry_CONOUT@mos16lo
-;    .byte entry_SELDSK@mos16lo
-;    .byte entry_SETSEC@mos16lo
-;    .byte entry_SETDMA@mos16lo
-;   .byte entry_READ@mos16lo
-;   .byte entry_WRITE@mos16lo
-;    .byte entry_RELOCATE@mos16lo
-;    .byte entry_GETTPA@mos16lo
-;    .byte entry_SETTPA@mos16lo
-;    .byte entry_GETZP@mos16lo
-;    .byte entry_SETZP@mos16lo
-;    .byte entry_SETBANK@mos16lo
-;biostable_hi:
-;    .byte entry_CONST@mos16hi
-;    .byte entry_CONIN@mos16hi
-;    .byte entry_CONOUT@mos16hi
-;    .byte entry_SELDSK@mos16hi
-;    .byte entry_SETSEC@mos16hi
-;    .byte entry_SETDMA@mos16hi
-;    .byte entry_READ@mos16hi
-;    .byte entry_WRITE@mos16hi
-;    .byte entry_RELOCATE@mos16hi
-;    .byte entry_GETTPA@mos16hi
-;    .byte entry_SETTPA@mos16hi
-;    .byte entry_GETZP@mos16hi
-;    .byte entry_SETZP@mos16hi
-;    .byte entry_SETBANK@mos16hi
-
-; --- TTY driver -------------------------------------------------------
+; --- Drivers -------------------------------------------------------
 .data
 .global drvtop
 drvtop: .word drv_TTY
+
+defdriver TTY, DRVID_TTY, drvstrat_TTY, drv_SCREEN
+
+; TTY driver strategy routine
+; Y = TTY opcode
+
+zproc drvstrat_TTY
+    jmpdispatch jmptable_lo, jmptable_hi
+
+jmptable_lo:
+    jmptablo tty_const
+    jmptablo tty_conin
+    jmptablo tty_conout
+jmptable_hi:
+    jmptabhi tty_const
+    jmptabhi tty_conin
+    jmptabhi tty_conout
+zendproc
+
 
 defdriver SCREEN, DRVID_SCREEN, drvstrat_SCREEN,0
 
@@ -223,10 +153,6 @@ zproc screen_getsize
 zendproc
 
 zproc screen_clear
-   ; Save registers
-   ; pha
-   ; phx
-   ; phy
     ;; Reset pointer
     lda #<VRAM_base
     sta vidpointer+0
@@ -271,9 +197,6 @@ cont:
     sta vidcursor_x
     sta vidcursor_y
     
-    ;ply
-    ;plx
-    ;pla
     rts
 zendproc
 
@@ -338,11 +261,11 @@ zproc screen_putstring
     stx ptr+1
     ldy #0
 putstring_loop:
-        lda (ptr),y
-        beq putstring_endloop
-        jsr jmp_out
-        iny
-        jmp putstring_loop
+    lda (ptr),y
+    beq putstring_endloop
+    jsr jmp_out
+    iny
+    jmp putstring_loop
 putstring_endloop:
     clc
     rts
@@ -538,24 +461,7 @@ normal_style:
     rts
 zendproc
 
-defdriver TTY, DRVID_TTY, drvstrat_TTY, drv_SCREEN
-
-; TTY driver strategy routine
-; Y = TTY opcode
-
-zproc drvstrat_TTY
-    jmpdispatch jmptable_lo, jmptable_hi
-
-jmptable_lo:
-    jmptablo tty_const
-    jmptablo tty_conin
-    jmptablo tty_conout
-jmptable_hi:
-    jmptabhi tty_const
-    jmptabhi tty_conin
-    jmptabhi tty_conout
-
-zendproc
+; --- TTY driver -------------------------------------------------------
 
 ; Returns 0xff if no key is pending, 0 if one is.
 zproc tty_const
@@ -577,11 +483,7 @@ zendproc
 zproc tty_conin
     lda pending_key
     zif_eq
-        ;zrepeat			
-        ;   jsr jmp_scan
-	   
-	;zuntil_ne
-	jsr jmp_inp
+	    jsr jmp_inp
         rts
     zendif
 
@@ -663,31 +565,24 @@ zendproc
 zproc entry_READ
 	jsr ch376_locate
 	jsr ch376_read_sector
-;	jsr ch376_closefile
 	rts
 zendproc
 
 zproc entry_WRITE
-;	ldx #<cpmfs_filename	
-;	ldy #>cpmfs_filename
-;	jsr ch376_open_persistent
 	jsr ch376_locate
 	jsr ch376_write_sector
-;	jsr ch376_closefile	
 	rts
 zendproc
 
 zproc entry_GETTPA
-    ;ldy current_bank	
-    lda mem_base;, y 
-    ldx mem_end;, y
+    lda mem_base  
+    ldx mem_end 
     rts
 zendproc
 
 zproc entry_SETTPA
-    ;ldy current_bank	
-    sta mem_base;, y
-    stx mem_end;, y
+    sta mem_base 
+    stx mem_end
     rts
 zendproc
 
@@ -704,7 +599,6 @@ zproc entry_SETZP
 zendproc
 
 zproc entry_SETBANK
-    ;sta current_bank
     rts
 zendproc
 
@@ -712,35 +606,22 @@ zendproc
 #include "daimx_ACIA2.inc"	
 
 .data
-current_bank:   .byte 0
-pending_key:    .byte 255
 zp_base: .byte __USERZEROPAGE_START__
 zp_end:  .byte __USERZEROPAGE_END__
 
-;mem_base: .byte 0x06
-;mem_end:  .byte 0x80
 mem_base: .byte __TPA0_START__@mos16hi
 mem_end:  .byte __TPA0_END__@mos16hi
-
-;.global drvtop
-; This must point at the _last_ driver.
-;drvtop: .word drv_TTY	
 	
 ; DPH for drive 0 (our only drive)
 
 define_drive dph, 128*64, 2048, 128, 0
-;directory_buffer: .fill 128
-
+directory_buffer = _start
 NOINIT
 
 filehandle:  .byte 0    ; file handle of disk image
-;pending_key: .byte 0    ; pending keypress from system
-;dma:         .word 0    ; Current DMA
+pending_key: .byte 0    ; pending keypress from system
 sector_num:  .fill 3    ; current absolute sector number
-fs_offset:   .fill 3
 	
-directory_buffer: .fill 128
-
 osgbpb_block:           ; block used by entry_READ and entry_WRITE
     .fill $0d
 osgbpb_block_end:
