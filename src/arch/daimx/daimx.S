@@ -466,12 +466,12 @@ zendproc
 
 ; --- TTY driver -------------------------------------------------------
 
-; Returns 0xff if no key is pending, 0 if one is.
+; Returns 0x00 if no key is pending, 0xff if one is.
 zproc tty_const
     lda pending_key
     zif_eq
         jsr jmp_scan
-	sta pending_key
+	    sta pending_key
         zif_eq
             lda #0
             rts
