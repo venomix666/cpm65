@@ -18,19 +18,9 @@ ch376_init:
 	
 	jmp ch376_init_cont
 ch376_init_failed:
-;	lda #<init_nok_string
-;	sta stringpointer_l
-;	lda #>init_nok_string
-;	sta stringpointer_h
-;	jsr print_string
 	
 ch376_init_cont:	
 	lda #$00
-;	sta loadflag
-;	sta saveflag
-;	sta bufpos_a
-;	sta bufpos_b
-;	sta buf_empt
 	sta ld_cnt
 	
 	pla
@@ -101,12 +91,6 @@ ch376_reset:
 	jsr delay_ch376
 	jsr delay_ch376
 
-;	lda #<reset_string
-;	sta stringpointer_l
-;	lda #>reset_string
-;	sta stringpointer_h
-;	jsr print_string
-	
 	pla
 	rts
 
@@ -129,11 +113,6 @@ ch376_usb_mode:
 	bne ch376_usb_mode_fail
 
 	jmp ch376_usb_mode_done
-;	lda #<usbmode_string
-; 	sta stringpointer_l
-;	lda #>usbmode_string
-;	sta stringpointer_h
-;	jsr print_string
 ch376_usb_mode_fail:
 	lda #$01
 	sta ld_cnt
@@ -148,8 +127,6 @@ ch376_connect:
 	lda #CH376_DISK_CONNECT
 	jsr ch376_send_cmd
 
-	;jsr delay_ch376
-
 	jsr ch376_read_status
 
 	;; Print status
@@ -157,18 +134,7 @@ ch376_connect:
 
 	bne ch376_connect_failed
 
-;	lda #<connect_ok
-;	sta stringpointer_l
-;	lda #>connect_ok
-;	sta stringpointer_h
-;	jsr print_string
-	jmp ch376_connect_done
 ch376_connect_failed:
-;	lda #<connect_nok
-;	sta stringpointer_l
-;	lda #>connect_nok
-;	sta stringpointer_h
-;	jsr print_string
 	lda #$01
 	sta ld_cnt
 ch376_connect_done:
@@ -214,12 +180,6 @@ ch376_openfile:
 ch376_open_notdir:
 	cmp #USB_INT_SUCCESS
 	bne ch376_open_failed
-
-	;lda #<open_ok
-	;sta stringpointer_l
-	;lda #>open_ok
-	;sta stringpointer_h
-	;jsr print_string
 
 	jmp ch376_openfile_done
 ch376_open_failed:
@@ -302,12 +262,6 @@ ch376_read_sector:
 	tya
 	pha
 
-;	lda #<read_string
-;	sta stringpointer_l
-;	lda #>read_string
-;	sta stringpointer_h
-;	jsr print_string
-
 	;; Setup read of 128 byte sector at current position
 	lda #CH376_BYTE_READ
 	jsr ch376_send_cmd
@@ -345,16 +299,6 @@ ch376_read_sector_read:
 	jmp ch376_read_sector_cont
 
 ch376_read_sector_done:
-;	tya
-;	jsr Jmp_byte
-
-;	ldy #$00
-;ch376_read_sector_debugprint:
-;	lda (dma),Y
-;	jsr jmp_out
-;	iny
-;	cpy #$80
-;	bne ch376_read_sector_debugprint
 
 	pla
 	tay
@@ -406,30 +350,20 @@ ch376_write_sector_done:
 ch376_locate:
 	pha
 
-;	lda #<seek_string
-;	sta stringpointer_l
-;	lda #>seek_string
-; 	sta stringpointer_h
-;	jsr print_string
-
 	lda #CH376_BYTE_LOCATE
 	jsr ch376_send_cmd
 
 	lda fs_offset+0
 	jsr ch376_send_data
-;	jsr Jmp_byte
 
 	lda fs_offset+1
 	jsr ch376_send_data	
-;	jsr Jmp_byte
 
 	lda fs_offset+2
 	jsr ch376_send_data	
-;	jsr Jmp_byte
 
 	lda fs_offset+3
 	jsr ch376_send_data	
-;	jsr Jmp_byte
 
 	jsr ch376_read_status
 	cmp #USB_INT_SUCCESS
@@ -510,63 +444,12 @@ delay_ch376_in:
 	rts
 
 
-;filename_root:
-;	.byte "/*"
-;	.byte $00
-
-;filename_input:
-;	.byte "Input filename: "
-;	.byte $00
-
-;init_ok_string:
-;	.byte "USB init OK"
-;	.byte $00
-
-;init_nok_string:
-;	.byte "USB init failed"
-;	.byte $00
-	
-;write_string:
-;	.byte "Writing line"
-;	.byte $00
-	
-;open_ok:			
-;	.ascii "File open OK"
-;	.byte $00
-
 open_nok:
 	.ascii "File open failed"
-	.byte $00
-
-seek_string:
-	.ascii "Seeking"
 	.byte $00
 
 seek_nok:
 	.ascii "Seek failed"
 	.byte $00
 
-read_string:
-	.ascii "Reading sector"
-	.byte $00
-
-;file_close_ok:
-;	.byte "File closed OK"
-;	.byte $00
-
-;file_create_ok:
-;	.byte "File create OK"
-;	.byte $00
-
-;file_create_nok:
-;	.byte "File create failed"
-;	.byte $00
-
-;file_erase_ok:
-;	.byte "File erase OK"
-;  	.byte $00
-
-;file_erase_nok:
-;	.byte "File erase failed"
-;	.byte $00			
 
