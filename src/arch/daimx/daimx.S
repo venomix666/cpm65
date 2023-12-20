@@ -50,6 +50,9 @@ zproc _start
 	ldy #>cpmfs_filename
 	jsr ch376_open_persistent
 
+    ; Initialize drivers
+    jsr initdrivers
+
     ; Avoid junk character in buffer at startup
     lda #$00
     sta pending_key
@@ -79,7 +82,7 @@ cpmfs_filename:
     .ascii "CPMFS"
     .byte 00
 
-; Stuff above of here must be 0x80 long, currently 0x82
+; Stuff above of here must be 0x80 long, currently OK
 
 ; --- Drivers -------------------------------------------------------
 .data
