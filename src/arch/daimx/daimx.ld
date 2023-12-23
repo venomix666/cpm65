@@ -1,6 +1,6 @@
 MEMORY {
     zp : ORIGIN = 0, LENGTH = 0xd0
-    ram (rw) : ORIGIN = 0x0700, LENGTH = 0xA00
+    ram (rw) : ORIGIN = 0x0600, LENGTH = 0xA00
 }
 
 SECTIONS {
@@ -15,7 +15,7 @@ SECTIONS {
 	.noinit (NOLOAD) : {
 		*(.noinit .noinit.*)
 		.=ALIGN(256);
-		__TPA0_START__ = 0x0F00;
+		__TPA0_START__ = 0x0E00;
 		__TPA0_END__   = 0x8000;
 
 	} >ram
