@@ -108,7 +108,10 @@ jmptable_hi:
 zendproc
 
 
-defdriver SCREEN, DRVID_SCREEN, drvstrat_SCREEN,0
+defdriver SCREEN, DRVID_SCREEN, drvstrat_SCREEN, drv_SERIAL
+
+; SCREEN driver strategy routine
+; Y = TTY opcode
 
 zproc drvstrat_SCREEN
     jmpdispatch screen_jmptable_lo, screen_jmptable_hi
@@ -142,6 +145,66 @@ screen_jmptable_hi:
     jmptabhi screen_cleartoeol
     jmptabhi screen_setstyle
 zendproc
+
+; SERIAL driver strategy routine
+; Y = TTY opcode
+
+defdriver "SERIAL", DRVID_SERIAL, drvstrat_SERIAL, 0
+
+zproc drvstrat_SERIAL
+    jmpdispatch serial_jmptable_lo, serial_jmptable_hi
+
+serial_jmptable_lo:
+    jmptablo serial_inp
+    jmptablo serial_out
+    jmptablo serial_open
+    jmptablo serial_close
+    jmptablo serial_outp
+    jmptablo serial_in    
+serial_jmptable_hi:
+    jmptabhi serial_inp
+    jmptabhi serial_out
+    jmptabhi serial_open
+    jmptabhi serial_close
+    jmptabhi serial_outp
+    jmptabhi serial_in 
+zendproc 
+
+; --- SERIAL driver -------------------------------------------------------
+
+zproc serial_inp
+    jsr ACIA3_Scan
+    zif_eq
+        sec
+        rts
+    zendif
+    clc
+    rts     
+zendproc
+
+zproc serial_out
+    jmp ACIA3_Output     
+zendproc
+
+zproc serial_open
+    jmp ACIA3_init
+zendproc
+
+zproc serial_close
+    rts
+zendproc
+
+zproc serial_outp
+    jsr ACIA3_Output
+    clc
+    rts
+zendproc
+
+zproc serial_in
+    jmp ACIA3_Input
+zendproc
+
+; --- SCREEN driver -------------------------------------------------------
 
 zproc screen_version
     lda #0
@@ -467,17 +530,19 @@ zendproc
 ; --- TTY driver -------------------------------------------------------
 
 ; Returns 0x00 if no key is pending, 0xff if one is.
+; C if no key is pending, !C if key pending
 zproc tty_const
     lda pending_key
     zif_eq
         jsr jmp_scan
 	    sta pending_key
         zif_eq
-            lda #0
+            sec
             rts
         zendif
     zendif
     lda #$ff
+    clc
     rts
 zendproc
 
@@ -607,7 +672,7 @@ zendproc
 
 #include "daimx_file.inc"
 #include "daimx_ACIA2.inc"	
-
+#include "daimx_ACIA3.inc"
 .data
 zp_base: .byte __USERZEROPAGE_START__
 zp_end:  .byte __USERZEROPAGE_END__

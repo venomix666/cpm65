@@ -22,10 +22,15 @@ bin_addr_l = $05f7
 bin_addr_h = $05f8
 ld_cnt = $05f9
 
-ACIA2dat = $8100
-ACIA2sta = $8101
-ACIA2cmd = $8102
-ACIA2ctl = $8103
+ACIA2dat = $8130
+ACIA2sta = $8131
+ACIA2cmd = $8132
+ACIA2ctl = $8133
+
+ACIA3dat = $8140
+ACIA3sta = $8141
+ACIA3cmd = $8142
+ACIA3ctl = $8143
 
 VRAM_base = $9000
 VRAM_row_two = VRAM_base + $40
