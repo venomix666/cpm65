@@ -399,11 +399,11 @@ scrup_cont:
     inc vidpointer+1
 scrup_vcont:
     inx
-    cpx #63
+    cpx #64
     bne scrup_loop_x
 
     iny
-    cpy #29
+    cpy #30
     bne scrup_loop_y
    
     lda vidcursor_x
