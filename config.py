@@ -18,6 +18,7 @@ MINIMAL_APPS_SRCS = {
     "0:ls.asm": "apps/ls.asm",
     "0:cpm65.inc": "apps/cpm65.inc",
     "0:drivers.inc": "apps/drivers.inc",
+    "0:more.asm": "apps/more.asm",
 }
 
 BIG_APPS = {
