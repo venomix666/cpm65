@@ -84,19 +84,10 @@ int main(void)
             if((inp >= 32) && (inp < 127)) {
                 switch(mEsc) {
                     case 0: // Regular ASCII
-                        // Use screen_putchar() instead? Requires handling of line
-                        // wrap...
-                        /*screen_putchar(inp);
+                        screen_putchar(inp);
                         cur_x++;
-                        if(cur_x > w) {
-                            cur_x = 0;
-                            cur_y++;
-                            if(cur_y > h) {
-                                cur_y = 0;
-                                screen_scrollup();
-                            }
-                        }*/
-                        cpm_conout(inp);
+                        if(cur_x > w) cur_x = 0;
+                        screen_setcursor(cur_x,cur_y);
                         parse = 0;
                         break;
                     case 1: // Escape sequence
@@ -245,15 +236,18 @@ int main(void)
                 inp = cpm_bios_conin();
                 switch(inp) {
                     case 'q':
+                    case 'Q':
                         // Quit
                         cpm_warmboot();
                         break;
                     case 'e':
+                    case 'E':
                         // Toggle local echo
                         if(!local_echo) local_echo = 1;
                         else local_echo = 0;
                         break;
                     case 'v':
+                    case 'V':
                         // Toggle VT52 emulation
                         if(!vt52) vt52 = 1;
                         else vt52 = 0;
