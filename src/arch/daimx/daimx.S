@@ -174,11 +174,6 @@ zendproc
 
 zproc serial_inp
     jsr ACIA3_Scan
-    zif_eq
-        sec
-        rts
-    zendif
-    clc
     rts     
 zendproc
 

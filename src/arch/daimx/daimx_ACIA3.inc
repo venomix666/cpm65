@@ -19,15 +19,15 @@ ACIA3_Input:
 ; non-waiting get character routine 
 ;
 ACIA3_Scan:	
-	clc
     lda   ACIA3sta           ; Serial port status
     and   #$08               ; mask rcvr full bit
     beq   ACIA3_scan2
     lda   ACIA3dat           ; get chr
-	sec
+	clc
 	rts
 ACIA3_scan2:
 	lda #$00
+    sec
 	rts
 ;
 ; output to port
