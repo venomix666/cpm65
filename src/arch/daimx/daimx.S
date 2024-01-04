@@ -75,7 +75,7 @@ bdos_filename:
 
 banner: ; reversed!
     .byte 13, 10
-    .ascii "---------------------- X-MIAD rof 56-M/PC ----------------------"
+    .ascii "------------------- X-MIAD rof 56-M/PC -------------------"
 banner_end:
 
 cpmfs_filename:
