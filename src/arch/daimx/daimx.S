@@ -313,7 +313,19 @@ zproc screen_getcursor
 zendproc
 
 zproc screen_putchar
-    jsr jmp_out
+    ;jsr jmp_out
+    ora vid_style
+    ldy #0
+    sta (vidpointer),Y
+
+    lda #63
+    cmp vidcursor_x
+    beq screen_putchar_done
+    inc vidcursor_x
+    lda vidcursor_x
+    ldx vidcursor_y
+    jsr screen_setcursor 
+screen_putchar_done:
     rts    
 zendproc
 
@@ -324,7 +336,7 @@ zproc screen_putstring
 putstring_loop:
     lda (ptr),y
     beq putstring_endloop
-    jsr jmp_out
+    jsr jmp_out 
     iny
     jmp putstring_loop
 putstring_endloop:
