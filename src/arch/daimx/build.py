@@ -19,7 +19,8 @@ llvmrawprogram(
 mkcpmfs(
     name="cpmfs",
     format="generic-1m",
-    items={"0:ccp.sys@sr": "src+ccp"}
+    items={"0:ccp.sys@sr": "src+ccp",
+	   "1:color.com": "src/arch/daimx/utils+color"}
     | MINIMAL_APPS
     | MINIMAL_APPS_SRCS
     | BIG_APPS
