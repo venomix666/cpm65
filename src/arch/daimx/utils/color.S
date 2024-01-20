@@ -1,6 +1,17 @@
+; ---------------------------------------------------------------------------
+;
+; DAIM-X text color setting utility
+;
+; Copyright (C) 2024 Henrik Löfgren
+; This file is licensed under the terms of the 2-cluse BSD license. Please
+; see the COPYING file in the root project directory for the full test.
+;
+; ---------------------------------------------------------------------------
+
 #include "zif.inc"
 #include "cpm65.inc"
 
+; Color RAM bank addresses
 CRAM_A = 0x9800
 CRAM_B = 0x9900
 CRAM_C = 0x9A00
@@ -15,28 +26,38 @@ ZEROPAGE
 color: .fill 1
 
 zproc main
-	lda cpm_fcb+1
+    ; Read hex color vaues from command line
 
+    ; Read first digit
+	lda cpm_fcb+1
+    ; Convert
 	jsr hexconv
+    ; Exit if not valid hex
     zif_cs
 	    rts
     zendif
 
+    ; Store and shift to high nibble
 	sta color
     asl color
     asl color
     asl color
     asl color
     
+    ; Read second digit
     lda cpm_fcb+2
 
+    ; Convert
     jsr hexconv
+    ; Exit if not valid hex
     zif_cs
 	    rts
     zendif
-
+    
+    ; Combine nibbles to final vaue
     ora color
 
+    ; Fill color RAM
     ldx #0
 fill_a:
 	sta CRAM_A,X
@@ -81,6 +102,7 @@ fill_h:
 	rts
 zendproc
 
+; Convert ASCII hex digit to number, print usage if not valid data
 zproc hexconv
     cmp #'0'
     bcs hexconv_a
