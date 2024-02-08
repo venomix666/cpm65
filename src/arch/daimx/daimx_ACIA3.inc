@@ -41,3 +41,27 @@ ACIA3_Out1:
     sta   ACIA3dat           ; put character to Port
     rts                      ; done
 
+DELAY_6551:
+	pha
+	tya
+	pha
+	txa
+	pha
+DELAY_6551_LOOP:
+	ldy #10			;Clock rate in MHz
+MINIDLY_6551:
+	ldx #$F0		;Set X-reg
+DELAY1_6551:
+	dex			;Decrease X counter
+	bne DELAY1_6551		;Loop until done
+	dey			;Decrease Y counter
+	bne MINIDLY_6551	;Loop until done
+
+	pla
+	tax
+	pla
+	tay
+	pla
+DELAY_DONE_6551:
+    rts
+

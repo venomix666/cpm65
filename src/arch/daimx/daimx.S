@@ -14,6 +14,7 @@ ZEROPAGE
 ptr: .word 0
 ptr1: .word 0
 dma: .fill 2
+current_bank: .byte 0
 ; --- Initialisation code ---------------------------------------------------
 
 ; Called once on startup and then never again.
@@ -30,26 +31,28 @@ zproc _start
 
     ; Initialize USB-disk interface
 
-    jsr ch376_init
-	
-    ; Load the BDOS image.
+    ;jsr ch376_init
+	jsr jmp_ch376_init
 
+    ; Load the BDOS image.
+    lda mem_base+1
     ldx #<bdos_filename
     ldy #>bdos_filename
-    jsr ch376_load_block
-
+    ;jsr ch376_load_block
+    jsr jmp_load_block
+    
     ; Relocate it.
 
-    lda mem_base
-
+    lda mem_base+1
     ldx zp_base
     jsr entry_RELOCATE
 
     ; Open CPMFS	
     ldx #<cpmfs_filename	
 	ldy #>cpmfs_filename
-	jsr ch376_open_persistent
-
+	;jsr ch376_open_persistent
+    jsr jmp_open_persistent
+    
     ; Initialize drivers
     jsr initdrivers
 
@@ -59,7 +62,7 @@ zproc _start
 
     ; Compute the entry address and jump.
 
-    lda mem_base
+    lda mem_base+1
     pha
     lda #COMHDR_ENTRY-1 ; rts addresses are one before the target
     pha
@@ -214,96 +217,98 @@ zproc screen_getsize
 zendproc
 
 zproc screen_clear
+    jmp jmp_cls
     ;; Reset pointer
-    lda #<VRAM_base
-    sta vidpointer+0
-    lda #>VRAM_base
-    sta vidpointer+1
+    ;lda #<VRAM_base
+    ;sta vidpointer+0
+    ;lda #>VRAM_base
+    ;sta vidpointer+1
 
 
-    ldy #$00
-y_loop:
-    ldx #$00
-x_loop:
+    ;ldy #$00
+;y_loop:
+    ;ldx #$00
+;x_loop:
     ;lda #$20 ; fill with space
-    tya
-    pha
-    lda #$20
-    ldy #$00
-    sta (vidpointer),Y
-    pla
-    tay
-    lda #$00
-    inc vidpointer+0
-    cmp vidpointer+0
-    bne cont
-    inc vidpointer+1
-cont:
-    inx
-    cpx #64
-    bne x_loop
+    ;tya
+    ;pha
+    ;lda #$20
+    ;ldy #$00
+    ;sta (vidpointer),Y
+    ;pla
+    ;tay
+    ;lda #$00
+    ;inc vidpointer+0
+    ;cmp vidpointer+0
+    ;bne cont
+    ;inc vidpointer+1
+;cont:
+    ;inx
+    ;cpx #64
+    ;bne x_loop
 
-    iny
-    cpy #30
-    bne y_loop
+    ;iny
+    ;cpy #30
+    ;bne y_loop
 
     ;; Reset pointer
-    lda #<VRAM_base
-    sta vidpointer+0
-    lda #>VRAM_base
-    sta vidpointer+1
+    ;lda #<VRAM_base
+    ;sta vidpointer+0
+    ;lda #>VRAM_base
+    ;sta vidpointer+1
 
     ;; Reset cursor position
-    lda #$00
-    sta vidcursor_x
-    sta vidcursor_y
+    ;lda #$00
+    ;sta vidcursor_x
+    ;sta vidcursor_y
     
-    rts
+    ;rts
 zendproc
 
 zproc screen_setcursor
+    jmp jmp_setcursor
     ; Update cursor location
-    sta vidcursor_x
-    stx vidcursor_y
+    ;sta vidcursor_x
+    ;stx vidcursor_y
   
     ; Ensure that cursor is removed from current position
-    ldy #0
-    lda (vidpointer),Y
-    cmp #0
-    bne nopointer 
-    lda vid_curchar
-    sta (vidpointer),Y
-nopointer:
+    ;ldy #0
+    ;lda (vidpointer),Y
+    ;cmp #0
+    ;bne nopointer 
+    ;lda vid_curchar
+    ;sta (vidpointer),Y
+;nopointer:
  
     ; Update pointer value
-    lda #<VRAM_base
-    sta vidpointer+0
-    lda #>VRAM_base
-    sta vidpointer+1
+    ;lda #<VRAM_base
+    ;sta vidpointer+0
+    ;lda #>VRAM_base
+    ;sta vidpointer+1
     
     ; Number of rows in x
-yp_loop:
-    cpx #$00
-    beq yp_done
-    dex
-    clc
-    lda vidpointer+0
-    adc #64
-    sta vidpointer+0
-    bcc yp_next
-    inc vidpointer+1
-yp_next:
-    jmp yp_loop
-yp_done:
-    clc
-    lda vidcursor_x
-    adc vidpointer+0
-    sta vidpointer+0
-    bcc xp_next
-    inc vidpointer+1
-xp_next:
+;yp_loop:
+    ;cpx #$00
+    ;beq yp_done
+    ;dex
+    ;clc
+    ;lda vidpointer+0
+    ;adc #64
+    ;sta vidpointer+0
+    ;bcc yp_next
+    ;inc vidpointer+1
+;yp_next:
+    ;jmp yp_loop
+;yp_done:
+    ;clc
+    ;lda vidcursor_x
+    ;adc vidpointer+0
+    ;sta vidpointer+0
+    ;bcc xp_next
+    ;inc vidpointer+1
+;xp_next:
     
-    rts
+    ;rts
 zendproc
 
 zproc screen_getcursor
@@ -360,166 +365,170 @@ nodata:
 zendproc
 
 zproc screen_showcursor
-    cmp #$00
-    bne curson
-    sta vid_curvis
-    rts
-curson:
-    lda #$01
-    sta vid_curvis
-    rts
+    jmp jmp_showcursor
+    ;cmp #$00
+    ;bne curson
+    ;sta vid_curvis
+    ;rts
+;curson:
+    ;lda #$01
+    ;sta vid_curvis
+    ;rts
 zendproc
 
 zproc screen_scrollup
-    lda #<VRAM_row_two
-    sta ptr+0
-    lda #>VRAM_row_two
-    sta ptr+1
+    jmp jmp_scrollup
+    ;lda #<VRAM_row_two
+    ;sta ptr+0
+    ;lda #>VRAM_row_two
+    ;sta ptr+1
     
-    lda #<VRAM_base
-    sta vidpointer+0
-    lda #>VRAM_base
-    sta vidpointer+1
+    ;lda #<VRAM_base
+    ;sta vidpointer+0
+    ;lda #>VRAM_base
+    ;sta vidpointer+1
 
-    ldy #$00
-scrup_loop_y:
-    ldx #$00
-scrup_loop_x:
-    tya
-    pha
-    ldy #$00
-    lda (ptr),y
-    sta (vidpointer),y
-    pla
-    tay 
+    ;ldy #$00
+;scrup_loop_y:
+    ;ldx #$00
+;scrup_loop_x:
+    ;tya
+    ;pha
+    ;ldy #$00
+    ;lda (ptr),y
+    ;sta (vidpointer),y
+    ;pla
+    ;tay 
     
-    inc ptr+0
-    lda #$00
-    cmp ptr+0
-    bne scrup_cont
-    inc ptr+1
-scrup_cont:
-    inc vidpointer+0
-    lda #$00
-    cmp vidpointer+0
-    bne scrup_vcont
-    inc vidpointer+1
-scrup_vcont:
-    inx
-    cpx #64
-    bne scrup_loop_x
+    ;inc ptr+0
+    ;lda #$00
+    ;cmp ptr+0
+    ;bne scrup_cont
+    ;inc ptr+1
+;scrup_cont:
+    ;inc vidpointer+0
+    ;lda #$00
+    ;cmp vidpointer+0
+    ;bne scrup_vcont
+    ;inc vidpointer+1
+;scrup_vcont:
+    ;inx
+    ;cpx #64
+    ;bne scrup_loop_x
 
-    iny
-    cpy #30
-    bne scrup_loop_y
+    ;iny
+    ;cpy #30
+    ;bne scrup_loop_y
    
-    lda vidcursor_x
-    sta ptr+0
-    ldx vidcursor_y
-    cpx #0
-    beq scrup_top
-    dex
-scrup_top:
-    stx ptr+1
+    ;lda vidcursor_x
+    ;sta ptr+0
+    ;ldx vidcursor_y
+    ;cpx #0
+    ;beq scrup_top
+    ;dex
+;scrup_top:
+    ;stx ptr+1
  
-    lda #0
-    ldx #29
-    jsr screen_setcursor
-    jsr screen_cleartoeol
+    ;lda #0
+    ;ldx #29
+    ;jsr screen_setcursor
+    ;jsr screen_cleartoeol
 
-    lda ptr+0
-    ldx ptr+1
-    jsr screen_setcursor
+    ;lda ptr+0
+    ;ldx ptr+1
+    ;jsr screen_setcursor
     
-    rts
+    ;rts
 zendproc
 
 zproc screen_scrolldown
-    lda #<VRAM_nextlastrow
-    sta ptr+0
-    lda #>VRAM_nextlastrow
-    sta ptr+1
+    jmp jmp_scrolldown
+    ;lda #<VRAM_nextlastrow
+    ;sta ptr+0
+    ;lda #>VRAM_nextlastrow
+    ;sta ptr+1
     
-    lda #<VRAM_lastrow
-    sta vidpointer+0
-    lda #>VRAM_lastrow
-    sta vidpointer+1
+    ;lda #<VRAM_lastrow
+    ;sta vidpointer+0
+    ;lda #>VRAM_lastrow
+    ;sta vidpointer+1
 
-    ldy #30
-scrdown_loop_y:
-    ldx #63
-scrdown_loop_x:
-    tya
-    pha
-    ldy #$00
-    lda (ptr),y
-    sta (vidpointer),y
-    pla
-    tay
+    ;ldy #30
+;scrdown_loop_y:
+    ;ldx #63
+;scrdown_loop_x:
+    ;tya
+    ;pha
+    ;ldy #$00
+    ;lda (ptr),y
+    ;sta (vidpointer),y
+    ;pla
+    ;tay
     
-    lda ptr+0
-    bne scrdown_cont
-    dec ptr+1
-scrdown_cont:
-    dec ptr+0
+    ;lda ptr+0
+    ;bne scrdown_cont
+    ;dec ptr+1
+;scrdown_cont:
+    ;dec ptr+0
     
-    lda vidpointer+0
-    bne scrdown_vcont
-    dec vidpointer+1
-scrdown_vcont:
-    dec vidpointer+0
+    ;lda vidpointer+0
+    ;bne scrdown_vcont
+    ;dec vidpointer+1
+;scrdown_vcont:
+    ;dec vidpointer+0
     
-    dex
-    cpx #00
-    bne scrdown_loop_x
+    ;dex
+    ;cpx #00
+    ;bne scrdown_loop_x
 
-    dey
-    cpy #00
-    bne scrdown_loop_y
+    ;dey
+    ;cpy #00
+    ;bne scrdown_loop_y
    
-    lda vidcursor_x
-    sta ptr+0
-    ldx vidcursor_y
-    cpx #29
-    beq scrdown_bot
-    inx
-scrdown_bot:
-    stx ptr+1
+    ;lda vidcursor_x
+    ;sta ptr+0
+    ;ldx vidcursor_y
+    ;cpx #29
+    ;beq scrdown_bot
+    ;inx
+;scrdown_bot:
+    ;stx ptr+1
  
-    lda #0
-    ldx #0
-    jsr screen_setcursor
-    jsr screen_cleartoeol
+    ;lda #0
+    ;ldx #0
+    ;jsr screen_setcursor
+    ;jsr screen_cleartoeol
     
-    lda ptr+0
-    ldx ptr+1
-    jsr screen_setcursor
+    ;lda ptr+0
+    ;ldx ptr+1
+    ;jsr screen_setcursor
     
-    rts
+    ;rts
 zendproc
 
 zproc screen_cleartoeol
-    ldx vidcursor_x
-    ldy #$00
-clearline_loop:
-    lda #$20
-    ora vid_style
-    sta (vidpointer),y
-    cpx #63
-    beq clearline_done
-    inx
-    inc vidpointer+0
-    lda #0
-    cmp vidpointer+0
-    bne clearline_cont
-    inc vidpointer+1
-clearline_cont:
-    jmp clearline_loop
-clearline_done:
-    lda vidcursor_x
-    ldx vidcursor_y
-    jsr screen_setcursor 
-    rts  
+    jmp jmp_cleartoeol
+;    ldx vidcursor_x
+;    ldy #$00
+;clearline_loop:
+;    lda #$20
+;    ora vid_style
+;    sta (vidpointer),y
+;    cpx #63
+;    beq clearline_done
+;    inx
+;    inc vidpointer+0
+;    lda #0
+;    cmp vidpointer+0
+;    bne clearline_cont
+;    inc vidpointer+1
+;clearline_cont:
+;    jmp clearline_loop
+;clearline_done:
+;    lda vidcursor_x
+;    ldx vidcursor_y
+;    jsr screen_setcursor 
+;    rts  
 zendproc
 
 zproc screen_setstyle
@@ -608,84 +617,102 @@ zendproc
 ; XA is a pointer to a three-byte number.
 
 zproc entry_SETSEC
-    sta ptr+0
-    stx ptr+1
+    jmp jmp_set_sector
+    ;sta ptr+0
+    ;stx ptr+1
 
 	
-	ldy #2
-        lda (ptr),y
-        lsr a
-        sta fs_offset+3
+	;ldy #2
+    ;    lda (ptr),y
+    ;    lsr a
+    ;    sta fs_offset+3
 
-        dey
-        lda (ptr),y
-        ror a
-        sta fs_offset+2
+    ;    dey
+    ;    lda (ptr),y
+    ;    ror a
+    ;    sta fs_offset+2
 
-        dey
-        lda (ptr),y
-        ror a
-        sta fs_offset+1
+    ;    dey
+    ;    lda (ptr),y
+    ;    ror a
+    ;    sta fs_offset+1
 
-        lda #0
-        ror a
-        sta fs_offset+0
+    ;    lda #0
+    ;    ror a
+    ;    sta fs_offset+0
 
-        clc
+    ;    clc
 
 	
-    rts
+    ;rts
 zendproc
 
 zproc entry_READ
-	jsr ch376_locate
-	jsr ch376_read_sector
-	rts
+	;jsr ch376_locate
+	;jsr ch376_read_sector
+	jsr jmp_locate
+    lda dma;#<dma
+    ldx dma+1;#>dma
+    jsr jmp_read_sector
+    rts
 zendproc
 
 zproc entry_WRITE
-	jsr ch376_locate
-	jsr ch376_write_sector
-	rts
+	;jsr ch376_locate
+	;jsr ch376_write_sector
+	jsr jmp_locate
+    lda dma;#<dma
+    ldx dma+1;#>dma
+    jsr jmp_write_sector
+    rts
 zendproc
 
 zproc entry_GETTPA
-    lda mem_base  
-    ldx mem_end 
+    ;ldy current_bank
+    lda mem_base;, Y  
+    ldx mem_end;, Y
     rts
 zendproc
 
 zproc entry_SETTPA
-    sta mem_base 
-    stx mem_end
+    ldy current_bank
+    cpy #0
+    bne settpa_end
+    sta mem_base;, Y 
+    stx mem_end;, Y
+settpa_end:
     rts
 zendproc
 
 zproc entry_GETZP
-    lda zp_base
-    ldx zp_end
+    ;ldy current_bank
+    lda zp_base;, Y
+    ldx zp_end;, Y
     rts
 zendproc
 
 zproc entry_SETZP
-    sta zp_base
-    stx zp_end
+    ;ldy current_bank
+    sta zp_base;, Y 
+    stx zp_end;, Y
     rts
 zendproc
 
 zproc entry_SETBANK
+    sta current_bank
     rts
 zendproc
 
-#include "daimx_file.inc"
-#include "daimx_ACIA2.inc"	
+;#include "daimx_file.inc"
+;#include "daimx_ACIA2.inc"	
 #include "daimx_ACIA3.inc"
 .data
-zp_base: .byte __USERZEROPAGE_START__
-zp_end:  .byte __USERZEROPAGE_END__
+;current_bank:   .byte 0
+zp_base: .byte __ZP0_START__;, __ZP1_START__
+zp_end:  .byte __ZP0_END__;, __ZP1_END__
 
-mem_base: .byte __TPA0_START__@mos16hi
-mem_end:  .byte __TPA0_END__@mos16hi
+mem_base: .byte __TPA0_START__@mos16hi, __TPA1_START__@mos16hi
+mem_end:  .byte __TPA0_END__@mos16hi, __TPA1_END__@mos16hi
 	
 ; DPH for drive 0 (our only drive)
 
