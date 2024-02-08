@@ -33,13 +33,13 @@ normalrule(
     ins=[
         ".+cpmfs",
         ".+daimx",
-        "src+bdos",
+        "src/bdos",
     ],
     outs=["daimx.zip"],
     commands=[
         "rm -f {outs[0]}",
 	"zip -9qj {outs[0]} {ins}",
-        r'printf "@ src+bdos\n@=BDOS\n" | zipnote -w {outs[0]}',
+        r'printf "@ bdos+bdos\n@=BDOS\n" | zipnote -w {outs[0]}',
         r'printf "@ daimx+daimx\n@=CPM.DMX\n" | zipnote -w {outs[0]}',
         r'printf "@ daimx+cpmfs.img\n@=CPMFS\n" | zipnote -w {outs[0]}',
     ],

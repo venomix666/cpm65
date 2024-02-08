@@ -45,7 +45,7 @@ zproc _start
 
     lda mem_base+1
     ldx zp_base
-    jsr entry_RELOCATE
+    jsr bios_RELOCATE
 
     ; Open CPMFS	
     ldx #<cpmfs_filename	
@@ -589,7 +589,7 @@ zendproc
 
 ; Sets the current DMA address.
 
-zproc entry_SETDMA
+zproc bios_SETDMA
     sta dma+0
     stx dma+1
     rts
@@ -600,7 +600,7 @@ zendproc
 ; Returns the DPH in XA.
 ; Sets carry on error.
 
-zproc entry_SELDSK
+zproc bios_SELDSK
     cmp #0
     zif_ne
         sec                 ; invalid drive
@@ -616,7 +616,7 @@ zendproc
 ; Set the current absolute sector number.
 ; XA is a pointer to a three-byte number.
 
-zproc entry_SETSEC
+zproc bios_SETSEC
     jmp jmp_set_sector
     ;sta ptr+0
     ;stx ptr+1
@@ -647,7 +647,7 @@ zproc entry_SETSEC
     ;rts
 zendproc
 
-zproc entry_READ
+zproc bios_READ
 	;jsr ch376_locate
 	;jsr ch376_read_sector
 	jsr jmp_locate
@@ -657,7 +657,7 @@ zproc entry_READ
     rts
 zendproc
 
-zproc entry_WRITE
+zproc bios_WRITE
 	;jsr ch376_locate
 	;jsr ch376_write_sector
 	jsr jmp_locate
@@ -667,14 +667,14 @@ zproc entry_WRITE
     rts
 zendproc
 
-zproc entry_GETTPA
+zproc bios_GETTPA
     ;ldy current_bank
     lda mem_base;, Y  
     ldx mem_end;, Y
     rts
 zendproc
 
-zproc entry_SETTPA
+zproc bios_SETTPA
     ldy current_bank
     cpy #0
     bne settpa_end
@@ -684,21 +684,21 @@ settpa_end:
     rts
 zendproc
 
-zproc entry_GETZP
+zproc bios_GETZP
     ;ldy current_bank
     lda zp_base;, Y
     ldx zp_end;, Y
     rts
 zendproc
 
-zproc entry_SETZP
+zproc bios_SETZP
     ;ldy current_bank
     sta zp_base;, Y 
     stx zp_end;, Y
     rts
 zendproc
 
-zproc entry_SETBANK
+zproc bios_SETBANK
     sta current_bank
     rts
 zendproc
