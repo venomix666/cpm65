@@ -761,8 +761,8 @@ zproc entry_TRANSIENT
 
     ; Reload disk.
 
-    jsr bdos_GETDRIVE
-    sta drive
+    lda drive
+    jsr bdos_SELECTDISK
     rts
 
 calltemp:
