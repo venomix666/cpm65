@@ -15,6 +15,7 @@ ptr: .word 0
 ptr1: .word 0
 dma: .fill 2
 current_bank: .byte 0
+current_drive: .byte 0
 ; --- Initialisation code ---------------------------------------------------
 
 ; Called once on startup and then never again.
@@ -81,10 +82,18 @@ banner: ; reversed!
     .ascii "------------------- X-MIAD rof 56-M/PC -------------------"
 banner_end:
 
+padding:
+    .ascii "THISISJUSTSOMESTUPIDPADDINGWHICHWILLBEOVERWRITTENONCETHEFILESTUFFISDONE...."
+    .ascii "YUPYUPYUPYUPYUPYUPYUPYUPYUPYUPYUPYUYPU"
+
 cpmfs_filename:
     .ascii "CPMFS"
     .byte 00
 
+utilfs_filename:
+    .ascii "UTILFS"
+    .byte 00
+    
 ; Stuff above of here must be 0x80 long, currently OK
 
 ; --- Drivers -------------------------------------------------------
@@ -601,15 +610,47 @@ zendproc
 ; Sets carry on error.
 
 zproc bios_SELDSK
-    cmp #0
-    zif_ne
-        sec                 ; invalid drive
+    ;cmp #0
+    ;zif_ne
+    ;    sec                 ; invalid drive
+    ;    rts
+    ;zendif
+
+    ;lda #<dph
+    ;ldx #>dph
+    ;clc
+    ;rts
+
+    cmp #0 ; A drive
+    zif_eq
+        jsr jmp_close_file
+        ; Open CPMFS	
+        ldx #<cpmfs_filename	
+	    ldy #>cpmfs_filename
+        jsr jmp_open_persistent
+        lda #<dph
+        ldx #>dph
+        clc 
         rts
     zendif
 
-    lda #<dph
-    ldx #>dph
-    clc
+    cmp #1 ; B drive
+    zif_eq
+        jsr jmp_close_file
+        ; Open UTILFS	
+        ldx #<utilfs_filename	
+	    ldy #>utilfs_filename
+        jsr jmp_open_persistent
+
+        lda #<dph_util
+        ldx #>dph_util
+
+        clc
+        rts 
+    zendif
+
+    ; Invalid drive
+    sec
     rts
 zendproc
 
@@ -717,16 +758,17 @@ mem_end:  .byte __TPA0_END__@mos16hi, __TPA1_END__@mos16hi
 ; DPH for drive 0 (our only drive)
 
 define_drive dph, 128*64, 2048, 128, 0
+define_drive dph_util, 128*64, 2048, 128, 0
 directory_buffer = _start
 NOINIT
 
-filehandle:  .byte 0    ; file handle of disk image
+;filehandle:  .byte 0    ; file handle of disk image
 pending_key: .byte 0    ; pending keypress from system
 sector_num:  .fill 3    ; current absolute sector number
 	
-osgbpb_block:           ; block used by entry_READ and entry_WRITE
-    .fill $0d
-osgbpb_block_end:
+;osgbpb_block:           ; block used by entry_READ and entry_WRITE
+;    .fill $0d
+;osgbpb_block_end:
 
 ; vim: filetype=asm sw=4 ts=4 et
 

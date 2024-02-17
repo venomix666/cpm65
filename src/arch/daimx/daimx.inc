@@ -27,6 +27,7 @@ jmp_set_sector = $E048
 jmp_locate = $E04B
 jmp_read_sector = $E04E
 jmp_write_sector = $E051
+jmp_close_file = $E02A
 stringpointer_l = $EE
 stringpointer_h = $EF
 cmdbuffer = $0400;$0500
