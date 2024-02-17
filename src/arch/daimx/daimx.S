@@ -32,14 +32,12 @@ zproc _start
 
     ; Initialize USB-disk interface
 
-    ;jsr ch376_init
 	jsr jmp_ch376_init
 
     ; Load the BDOS image.
     lda mem_base+1
     ldx #<bdos_filename
     ldy #>bdos_filename
-    ;jsr ch376_load_block
     jsr jmp_load_block
     
     ; Relocate it.
@@ -51,7 +49,6 @@ zproc _start
     ; Open CPMFS	
     ldx #<cpmfs_filename	
 	ldy #>cpmfs_filename
-	;jsr ch376_open_persistent
     jsr jmp_open_persistent
     
     ; Initialize drivers
@@ -79,23 +76,25 @@ bdos_filename:
 
 banner: ; reversed!
     .byte 13, 10
-    .ascii "------------------- X-MIAD rof 56-M/PC -------------------"
+    .ascii "-------------------- X-MIAD rof 56-M/PC --------------------"
 banner_end:
+    ; Filler
+    .byte 00
+; Stuff above of here must be 0x80 long, currently OK
 
-padding:
-    .ascii "THISISJUSTSOMESTUPIDPADDINGWHICHWILLBEOVERWRITTENONCETHEFILESTUFFISDONE...."
-    .ascii "YUPYUPYUPYUPYUPYUPYUPYUPYUPYUPYUPYUYPU"
-
+; ---- Drive filenames -----
 cpmfs_filename:
     .ascii "CPMFS"
     .byte 00
 
-utilfs_filename:
-    .ascii "UTILFS"
+drive_b_filename:
+    .ascii "CPMFS_B"
+    .byte 00
+
+drive_c_filename:
+    .ascii "CPMFS_C"
     .byte 00
     
-; Stuff above of here must be 0x80 long, currently OK
-
 ; --- Drivers -------------------------------------------------------
 .data
 .global drvtop
@@ -227,97 +226,10 @@ zendproc
 
 zproc screen_clear
     jmp jmp_cls
-    ;; Reset pointer
-    ;lda #<VRAM_base
-    ;sta vidpointer+0
-    ;lda #>VRAM_base
-    ;sta vidpointer+1
-
-
-    ;ldy #$00
-;y_loop:
-    ;ldx #$00
-;x_loop:
-    ;lda #$20 ; fill with space
-    ;tya
-    ;pha
-    ;lda #$20
-    ;ldy #$00
-    ;sta (vidpointer),Y
-    ;pla
-    ;tay
-    ;lda #$00
-    ;inc vidpointer+0
-    ;cmp vidpointer+0
-    ;bne cont
-    ;inc vidpointer+1
-;cont:
-    ;inx
-    ;cpx #64
-    ;bne x_loop
-
-    ;iny
-    ;cpy #30
-    ;bne y_loop
-
-    ;; Reset pointer
-    ;lda #<VRAM_base
-    ;sta vidpointer+0
-    ;lda #>VRAM_base
-    ;sta vidpointer+1
-
-    ;; Reset cursor position
-    ;lda #$00
-    ;sta vidcursor_x
-    ;sta vidcursor_y
-    
-    ;rts
 zendproc
 
 zproc screen_setcursor
     jmp jmp_setcursor
-    ; Update cursor location
-    ;sta vidcursor_x
-    ;stx vidcursor_y
-  
-    ; Ensure that cursor is removed from current position
-    ;ldy #0
-    ;lda (vidpointer),Y
-    ;cmp #0
-    ;bne nopointer 
-    ;lda vid_curchar
-    ;sta (vidpointer),Y
-;nopointer:
- 
-    ; Update pointer value
-    ;lda #<VRAM_base
-    ;sta vidpointer+0
-    ;lda #>VRAM_base
-    ;sta vidpointer+1
-    
-    ; Number of rows in x
-;yp_loop:
-    ;cpx #$00
-    ;beq yp_done
-    ;dex
-    ;clc
-    ;lda vidpointer+0
-    ;adc #64
-    ;sta vidpointer+0
-    ;bcc yp_next
-    ;inc vidpointer+1
-;yp_next:
-    ;jmp yp_loop
-;yp_done:
-    ;clc
-    ;lda vidcursor_x
-    ;adc vidpointer+0
-    ;sta vidpointer+0
-    ;bcc xp_next
-    ;inc vidpointer+1
-;xp_next:
-    
-    ;rts
 zendproc
 
 zproc screen_getcursor
@@ -327,7 +239,6 @@ zproc screen_getcursor
 zendproc
 
 zproc screen_putchar
-    ;jsr jmp_out
     ora vid_style
     ldy #0
     sta (vidpointer),Y
@@ -375,169 +286,18 @@ zendproc
 
 zproc screen_showcursor
     jmp jmp_showcursor
-    ;cmp #$00
-    ;bne curson
-    ;sta vid_curvis
-    ;rts
-;curson:
-    ;lda #$01
-    ;sta vid_curvis
-    ;rts
 zendproc
 
 zproc screen_scrollup
     jmp jmp_scrollup
-    ;lda #<VRAM_row_two
-    ;sta ptr+0
-    ;lda #>VRAM_row_two
-    ;sta ptr+1
-    
-    ;lda #<VRAM_base
-    ;sta vidpointer+0
-    ;lda #>VRAM_base
-    ;sta vidpointer+1
-
-    ;ldy #$00
-;scrup_loop_y:
-    ;ldx #$00
-;scrup_loop_x:
-    ;tya
-    ;pha
-    ;ldy #$00
-    ;lda (ptr),y
-    ;sta (vidpointer),y
-    ;pla
-    ;tay 
-    
-    ;inc ptr+0
-    ;lda #$00
-    ;cmp ptr+0
-    ;bne scrup_cont
-    ;inc ptr+1
-;scrup_cont:
-    ;inc vidpointer+0
-    ;lda #$00
-    ;cmp vidpointer+0
-    ;bne scrup_vcont
-    ;inc vidpointer+1
-;scrup_vcont:
-    ;inx
-    ;cpx #64
-    ;bne scrup_loop_x
-
-    ;iny
-    ;cpy #30
-    ;bne scrup_loop_y
-   
-    ;lda vidcursor_x
-    ;sta ptr+0
-    ;ldx vidcursor_y
-    ;cpx #0
-    ;beq scrup_top
-    ;dex
-;scrup_top:
-    ;stx ptr+1
- 
-    ;lda #0
-    ;ldx #29
-    ;jsr screen_setcursor
-    ;jsr screen_cleartoeol
-
-    ;lda ptr+0
-    ;ldx ptr+1
-    ;jsr screen_setcursor
-    
-    ;rts
 zendproc
 
 zproc screen_scrolldown
     jmp jmp_scrolldown
-    ;lda #<VRAM_nextlastrow
-    ;sta ptr+0
-    ;lda #>VRAM_nextlastrow
-    ;sta ptr+1
-    
-    ;lda #<VRAM_lastrow
-    ;sta vidpointer+0
-    ;lda #>VRAM_lastrow
-    ;sta vidpointer+1
-
-    ;ldy #30
-;scrdown_loop_y:
-    ;ldx #63
-;scrdown_loop_x:
-    ;tya
-    ;pha
-    ;ldy #$00
-    ;lda (ptr),y
-    ;sta (vidpointer),y
-    ;pla
-    ;tay
-    
-    ;lda ptr+0
-    ;bne scrdown_cont
-    ;dec ptr+1
-;scrdown_cont:
-    ;dec ptr+0
-    
-    ;lda vidpointer+0
-    ;bne scrdown_vcont
-    ;dec vidpointer+1
-;scrdown_vcont:
-    ;dec vidpointer+0
-    
-    ;dex
-    ;cpx #00
-    ;bne scrdown_loop_x
-
-    ;dey
-    ;cpy #00
-    ;bne scrdown_loop_y
-   
-    ;lda vidcursor_x
-    ;sta ptr+0
-    ;ldx vidcursor_y
-    ;cpx #29
-    ;beq scrdown_bot
-    ;inx
-;scrdown_bot:
-    ;stx ptr+1
- 
-    ;lda #0
-    ;ldx #0
-    ;jsr screen_setcursor
-    ;jsr screen_cleartoeol
-    
-    ;lda ptr+0
-    ;ldx ptr+1
-    ;jsr screen_setcursor
-    
-    ;rts
 zendproc
 
 zproc screen_cleartoeol
     jmp jmp_cleartoeol
-;    ldx vidcursor_x
-;    ldy #$00
-;clearline_loop:
-;    lda #$20
-;    ora vid_style
-;    sta (vidpointer),y
-;    cpx #63
-;    beq clearline_done
-;    inx
-;    inc vidpointer+0
-;    lda #0
-;    cmp vidpointer+0
-;    bne clearline_cont
-;    inc vidpointer+1
-;clearline_cont:
-;    jmp clearline_loop
-;clearline_done:
-;    lda vidcursor_x
-;    ldx vidcursor_y
-;    jsr screen_setcursor 
-;    rts  
 zendproc
 
 zproc screen_setstyle
@@ -637,13 +397,28 @@ zproc bios_SELDSK
     cmp #1 ; B drive
     zif_eq
         jsr jmp_close_file
-        ; Open UTILFS	
-        ldx #<utilfs_filename	
-	    ldy #>utilfs_filename
+        ; Open Drive B	
+        ldx #<drive_b_filename	
+	    ldy #>drive_b_filename
         jsr jmp_open_persistent
 
-        lda #<dph_util
-        ldx #>dph_util
+        lda #<dph_b
+        ldx #>dph_b
+
+        clc
+        rts 
+    zendif
+
+    cmp #2 ; C drive
+    zif_eq
+        jsr jmp_close_file
+        ; Open Drive C	
+        ldx #<drive_c_filename	
+	    ldy #>drive_c_filename
+        jsr jmp_open_persistent
+
+        lda #<dph_c
+        ldx #>dph_c
 
         clc
         rts 
@@ -659,38 +434,9 @@ zendproc
 
 zproc bios_SETSEC
     jmp jmp_set_sector
-    ;sta ptr+0
-    ;stx ptr+1
-
-	
-	;ldy #2
-    ;    lda (ptr),y
-    ;    lsr a
-    ;    sta fs_offset+3
-
-    ;    dey
-    ;    lda (ptr),y
-    ;    ror a
-    ;    sta fs_offset+2
-
-    ;    dey
-    ;    lda (ptr),y
-    ;    ror a
-    ;    sta fs_offset+1
-
-    ;    lda #0
-    ;    ror a
-    ;    sta fs_offset+0
-
-    ;    clc
-
-	
-    ;rts
 zendproc
 
 zproc bios_READ
-	;jsr ch376_locate
-	;jsr ch376_read_sector
 	jsr jmp_locate
     lda dma;#<dma
     ldx dma+1;#>dma
@@ -699,8 +445,6 @@ zproc bios_READ
 zendproc
 
 zproc bios_WRITE
-	;jsr ch376_locate
-	;jsr ch376_write_sector
 	jsr jmp_locate
     lda dma;#<dma
     ldx dma+1;#>dma
@@ -744,8 +488,6 @@ zproc bios_SETBANK
     rts
 zendproc
 
-;#include "daimx_file.inc"
-;#include "daimx_ACIA2.inc"	
 #include "daimx_ACIA3.inc"
 .data
 ;current_bank:   .byte 0
@@ -755,20 +497,17 @@ zp_end:  .byte __ZP0_END__;, __ZP1_END__
 mem_base: .byte __TPA0_START__@mos16hi, __TPA1_START__@mos16hi
 mem_end:  .byte __TPA0_END__@mos16hi, __TPA1_END__@mos16hi
 	
-; DPH for drive 0 (our only drive)
+; DPH for drives
 
 define_drive dph, 128*64, 2048, 128, 0
-define_drive dph_util, 128*64, 2048, 128, 0
+define_drive dph_b, 128*64, 2048, 128, 0
+define_drive dph_c, 128*64, 2048, 128, 0
+
 directory_buffer = _start
 NOINIT
 
-;filehandle:  .byte 0    ; file handle of disk image
 pending_key: .byte 0    ; pending keypress from system
 sector_num:  .fill 3    ; current absolute sector number
 	
-;osgbpb_block:           ; block used by entry_READ and entry_WRITE
-;    .fill $0d
-;osgbpb_block_end:
-
 ; vim: filetype=asm sw=4 ts=4 et
 
