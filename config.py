@@ -35,6 +35,7 @@ BIG_APPS = {
     "0:scrntest.com": "apps+scrntest",
     "0:kbdtest.com": "apps+kbdtest",
     "0:ansiterm.com": "apps+ansiterm",
+    "0:dopewars.com": "apps+dopewars",
 }
 
 BIG_APPS_SRCS = {}
