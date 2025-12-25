@@ -17,6 +17,7 @@
 #define OP2_JG              0x03
 #define OP2_DEC_CHK         0x04
 #define OP2_INC_CHK         0x05
+#define OP2_JIN             0x06
 #define OP2_TEST            0x07
 #define OP2_OR              0x08
 #define OP2_AND             0x09
@@ -94,14 +95,20 @@
 
 /* VAR */
 #define OPV_CALL            0x00
-#define OPV_STOREW          0x01
-#define OPV_STOREB          0x02
-#define OPV_PUT_PROP        0x03
-#define OPV_SREAD           0x04
-#define OPV_PRINT_CHAR      0x05
-#define OPV_PRINT_NUM       0x06
-#define OPV_PUSH            0x08
-#define OPV_PULL            0x09
+#define OPV_STOREW          0x21
+#define OPV_STOREB          0x22
+#define OPV_PUT_PROP        0x23
+#define OPV_SREAD           0x24
+#define OPV_PRINT_CHAR      0x25
+#define OPV_PRINT_NUM       0x26
+#define OPV_AND             0x09
+#define OPV_OR              0x0A
+#define OPV_NOT             0x0B
+#define OPV_CALL_EXT        0x20
+#define OPV_PUSH            0x28
+#define OPV_PULL            0x29
+
+
 
 /* ============================================================
  * BDOS
@@ -365,9 +372,9 @@ static inline void push(int16_t v){stack[sp++]=v;}
 static inline int16_t pop(void){return stack[--sp];}
 
 static uint16_t get_var(uint8_t v){
-    //cpm_printstring("get_var - v:");
-    //print_hex(v);
-   // crlf();
+    cpm_printstring("get_var - v:");
+    print_hex(v);
+    crlf();
     if(v==0) {
         uint16_t stack;
         stack = pop();
@@ -377,9 +384,9 @@ static uint16_t get_var(uint8_t v){
         return stack;
     }
     if(v<16) {
-       // cpm_printstring("local: ");
-       // print_hex(frames[fp-1].locals[v-1]);
-       // crlf();
+        cpm_printstring("local: ");
+        print_hex(frames[fp-1].locals[v-1]);
+        crlf();
         return frames[fp-1].locals[v-1];
     }
         //uint16_t a=zm_read16(0x0C)+2*(v-16);
@@ -395,6 +402,11 @@ static uint16_t get_var(uint8_t v){
 }
 
 static void set_var(uint8_t v,uint16_t val){
+    cpm_printstring("Setvar - var: ");
+    print_hex(v);
+    cpm_printstring(" val: ");
+    print_hex(val);
+    crlf();
     if(v==0) push(val);
     else if(v<16) frames[fp-1].locals[v-1]=val;
     else{
@@ -790,6 +802,8 @@ static void step(void){
     if(op<0x80){
         uint8_t t1=(op&0x40)?OP_VAR:OP_SMALL;
         uint8_t t2=(op&0x20)?OP_VAR:OP_SMALL;
+        if(op == 0x05 || op ==0x04) t1=OP_VAR;
+        uint8_t var_num = zm_read8(pc);
         operands[0]=read_operand(t1);
         operands[1]=read_operand(t2);
 
@@ -814,14 +828,27 @@ static void step(void){
         case OP2_JG:  
             branch((int16_t)operands[0]>(int16_t)operands[1]); 
             break;
+        case OP2_JIN: {
+            uint8_t parent;
+            parent = obj_parent(operands[0]);
+            branch(parent == operands[1]); 
+            break;
+            }
         case OP2_DEC_CHK:
             operands[0]--;
-            set_var(operands[0],operands[0]);
+            set_var(var_num,operands[0]);
             branch((int16_t)operands[0]<(int16_t)operands[1]);
             break;
         case OP2_INC_CHK:
+            cpm_printstring("OP2_INC_CHK entry - OP1: ");
+            print_hex(operands[0]);
+            cpm_printstring(" OP2: ");
+            print_hex(operands[1]);
+            cpm_printstring(" Var: ");
+            print_hex(var_num);
+            crlf(); 
             operands[0]++;
-            set_var(operands[0],operands[0]);
+            set_var(var_num,operands[0]);
             branch((int16_t)operands[0]>(int16_t)operands[1]);
             break;
         case OP2_TEST:
@@ -932,6 +959,18 @@ static void step(void){
         case OP1_PRINT_ADDR:
             print_zstring(operands[0]);
             break;
+        case OP1_PRINT_OBJ: {
+            uint16_t obj = operands[0];
+
+            if(obj==0) break;
+
+            uint16_t entry = obj_addr(obj);
+            uint16_t prop_table = zm_read16(entry + 7);
+            uint8_t name_len = zm_read8(prop_table);
+            if(name_len==0) break;
+            print_zstring(prop_table+1);
+            break;
+        }
         case OP1_RET:
         //case OP1_VALUE:
             z_ret(operands[0]);
@@ -1012,7 +1051,12 @@ static void step(void){
     }
     /* -------- VAR -------- */
     decode_operands(zm_read8(pc++));
-    switch(op&0x1F){
+    uint8_t var_opcode = op & 0x1f;
+    if((op & 0xE0)==0xE0) var_opcode += 0x20;
+    cpm_printstring("Var opcode: ");
+    print_hex(var_opcode);
+    crlf();
+    switch(var_opcode) {
     /*case OPV_CALL:
         cpm_printstring("Call - ");
         if(operands[0]==0) {
@@ -1037,6 +1081,7 @@ static void step(void){
             crlf();
         }
         break;*/
+    case OPV_CALL_EXT:
     case OPV_CALL: {
         if (operands[0] == 0) {
             uint8_t sv = zm_read8(pc++);
@@ -1128,6 +1173,12 @@ static void step(void){
             crlf();
             obj_put_prop((uint8_t)operands[0],(uint8_t)operands[1],
                          operands[2]);
+        break;
+    case OPV_OR:
+        store_result(operands[0] | operands[1]);
+        break;
+    case OPV_AND:
+        store_result(operands[0] & operands[1]);
         break;
     default:
         printi(op); 
