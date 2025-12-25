@@ -96,6 +96,8 @@
 /* VAR */
 #define OPV_CALL            0x00
 #define OPV_JE              0x01
+#define OPV_JL              0x02
+#define OPV_JG              0x03
 #define OPV_STOREW          0x21
 #define OPV_STOREB          0x22
 #define OPV_PUT_PROP        0x23
@@ -373,9 +375,9 @@ static inline void push(int16_t v){stack[sp++]=v;}
 static inline int16_t pop(void){return stack[--sp];}
 
 static uint16_t get_var(uint8_t v){
-    cpm_printstring("get_var - v:");
-    print_hex(v);
-    crlf();
+//    cpm_printstring("get_var - v:");
+//    print_hex(v);
+//    crlf();
     if(v==0) {
         uint16_t stack;
         stack = pop();
@@ -385,9 +387,9 @@ static uint16_t get_var(uint8_t v){
         return stack;
     }
     if(v<16) {
-        cpm_printstring("local: ");
-        print_hex(frames[fp-1].locals[v-1]);
-        crlf();
+   //     cpm_printstring("local: ");
+   //     print_hex(frames[fp-1].locals[v-1]);
+  //      crlf();
         return frames[fp-1].locals[v-1];
     }
         //uint16_t a=zm_read16(0x0C)+2*(v-16);
@@ -403,11 +405,11 @@ static uint16_t get_var(uint8_t v){
 }
 
 static void set_var(uint8_t v,uint16_t val){
-    cpm_printstring("Setvar - var: ");
-    print_hex(v);
-    cpm_printstring(" val: ");
-    print_hex(val);
-    crlf();
+//    cpm_printstring("Setvar - var: ");
+//    print_hex(v);
+//    cpm_printstring(" val: ");
+//    print_hex(val);
+//    crlf();
     if(v==0) push(val);
     else if(v<16) frames[fp-1].locals[v-1]=val;
     else{
@@ -794,11 +796,11 @@ static inline uint16_t unpack_routine(uint16_t p)
 
 static void step(void){
     uint8_t op=zm_read8(pc++);
-    cpm_printstring("OP: ");
-    print_hex(op);
-    cpm_printstring(" PC: ");
-    print_hex(pc);
-    crlf();
+    //cpm_printstring("OP: ");
+    //print_hex(op);
+    //cpm_printstring(" PC: ");
+    //print_hex(pc);
+    //crlf();
     /* -------- 2OP -------- */
     if(op<0x80){
         uint8_t t1=(op&0x40)?OP_VAR:OP_SMALL;
@@ -816,11 +818,11 @@ static void step(void){
 
         switch(op&0x1F){
         case OP2_JE:
-            cpm_printstring("JE ");
-            printi(operands[0]);
-            spc();
-            printi(operands[1]);
-            crlf();  
+            //cpm_printstring("JE ");
+            //printi(operands[0]);
+            //spc();
+            //printi(operands[1]);
+            //crlf();  
             branch(operands[0]==operands[1]); 
             break;
         case OP2_JL:  
@@ -841,13 +843,13 @@ static void step(void){
             branch((int16_t)operands[0]<(int16_t)operands[1]);
             break;
         case OP2_INC_CHK:
-            cpm_printstring("OP2_INC_CHK entry - OP1: ");
-            print_hex(operands[0]);
-            cpm_printstring(" OP2: ");
-            print_hex(operands[1]);
-            cpm_printstring(" Var: ");
-            print_hex(var_num);
-            crlf(); 
+            //cpm_printstring("OP2_INC_CHK entry - OP1: ");
+            //print_hex(operands[0]);
+            //cpm_printstring(" OP2: ");
+            //print_hex(operands[1]);
+            //cpm_printstring(" Var: ");
+            //print_hex(var_num);
+            //crlf(); 
             operands[0]++;
             set_var(var_num,operands[0]);
             branch((int16_t)operands[0]>(int16_t)operands[1]);
@@ -934,11 +936,13 @@ static void step(void){
         uint8_t type=(op>>4)&3;
         uint8_t oc=op&0x0F;
         if(type!=OP_OMIT) operands[0]=read_operand(type);
-        cpm_printstring("Type: ");
-        printi(type);
-        cpm_printstring(" Operand 1: ");
-        printi(operands[0]);
-        crlf();
+        //cpm_printstring("Type: ");
+        //printi(type);
+        //cpm_printstring(" Operand 1: ");
+        //printi(operands[0]);
+        //cpm_printstring(" oc: ");
+        //print_hex(oc);
+        //crlf();
         switch(oc){
         /*case OP1_RTRUE: 
             z_ret(1); 
@@ -952,9 +956,9 @@ static void step(void){
             pc+=2;
             break;*/
         case OP1_JUMP:
-            cpm_printstring("Performing jump with offset");
-            printi(operands[0]-2);
-            crlf();
+            //cpm_printstring("Performing jump with offset");
+            //printi(operands[0]-2);
+            //crlf();
             pc+=(int16_t)operands[0]-2;
             break;
         case OP1_PRINT_ADDR:
@@ -1015,6 +1019,11 @@ static void step(void){
         case OP1_JZ:
             branch(operands[0]==0);
             break;
+        case OP1_PRINT_PADDR: {
+            uint16_t addr = unpack_routine(operands[0]);
+            print_zstring(addr);
+            break;
+        }
         default:
             printi(op); 
             fatal(" - Non-implemented opcode!!!");
@@ -1122,9 +1131,9 @@ static void step(void){
         f->return_pc = pc;
 
         uint16_t addr = unpack_routine(operands[0]);
-        cpm_printstring("CALL to address ");
-        print_hex(addr);
-        crlf();
+        //cpm_printstring("CALL to address ");
+        //print_hex(addr);
+        //crlf();
         f->num_locals = zm_read8(addr++);
 
         for (uint8_t i = 0; i < f->num_locals; i++)
@@ -1144,14 +1153,21 @@ static void step(void){
     case OPV_JE:
         branch(operands[0] == operands[1]);
         break;
+    case OPV_JL:
+        branch((int16_t)operands[0] < (int16_t)operands[1]);
+        break;
+    case OPV_JG:
+        branch((int16_t)operands[0] > (int16_t)operands[1]);
+        break;
+
     case OPV_STOREW:
-        cpm_printstring("STOREW: ");
-        printi(operands[0]);
-        spc();
-        printi(operands[1]);
-        spc();
-        printi(operands[2]);
-        crlf();
+        //cpm_printstring("STOREW: ");
+        //printi(operands[0]);
+        //spc();
+        //printi(operands[1]);
+        //spc();
+        //printi(operands[2]);
+        //crlf();
         zm_write8(operands[0]+2*operands[1],operands[2]>>8);
         zm_write8(operands[0]+2*operands[1]+1,operands[2]);
         break;
