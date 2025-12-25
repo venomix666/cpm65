@@ -557,8 +557,11 @@ static void print_num(int16_t v){
 // Dictionary
 static void dict_init(void){
     dict_addr = zm_read16(0x08);
-
+    cpm_printstring("Dict addr ");
+    print_hex(dict_addr);
     dict_sep_count = zm_read8(dict_addr++);
+    cpm_printstring(" Dict sep cnt ");
+    printi(dict_sep_count);
     for(uint8_t i=0;i<dict_sep_count;i++)
         dict_seps[i]=zm_read8(dict_addr++);
 
@@ -585,6 +588,9 @@ static uint16_t dict_lookup(const char *w,uint8_t len){
 // Tokenization
 
 static uint8_t is_sep(char c){
+    cpm_printstring("is_sep: ");
+    cpm_conout(c);
+    crlf();
     for(uint8_t i=0;i<dict_sep_count;i++)
         if(c==dict_seps[i]) return 1;
     return c==' ';
@@ -1048,7 +1054,7 @@ static void step(void){
             print_zstring(pc);
             while(!(zm_read16(pc)&0x8000)) pc+=2;
             pc+=2;
-            putc('\n');
+            crlf();
             z_ret(1);
             break;
 
