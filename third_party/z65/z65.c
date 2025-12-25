@@ -95,6 +95,7 @@
 
 /* VAR */
 #define OPV_CALL            0x00
+#define OPV_JE              0x01
 #define OPV_STOREW          0x21
 #define OPV_STOREB          0x22
 #define OPV_PUT_PROP        0x23
@@ -971,6 +972,31 @@ static void step(void){
             print_zstring(prop_table+1);
             break;
         }
+        case OP1_GET_CHILD: {
+            uint8_t result;
+            if(operands[0]==0) result = 0;
+            else result = obj_child(operands[0]);
+            store_result(result);
+            branch(result!=0);
+            break;
+        }
+        case OP1_GET_SIBLING: {
+            uint8_t result;
+            if(operands[0]==0) result = 0;
+            else result = obj_sibling(operands[0]);
+            store_result(result);
+            branch(result!=0);
+            break;
+        }
+
+
+        case OP1_GET_PARENT: {
+            uint8_t result;
+            if(operands[0]==0) result = 0;
+            else result = obj_parent(operands[0]);
+            store_result(result);
+            break;
+        }
         case OP1_RET:
         //case OP1_VALUE:
             z_ret(operands[0]);
@@ -1115,7 +1141,9 @@ static void step(void){
         pc = addr + 2 * f->num_locals;
         break;
     }
-
+    case OPV_JE:
+        branch(operands[0] == operands[1]);
+        break;
     case OPV_STOREW:
         cpm_printstring("STOREW: ");
         printi(operands[0]);
