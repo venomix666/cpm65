@@ -12,6 +12,7 @@ from config import (
     SERIAL_APPS,
     SERIAL_SCREEN_APPS,
     FORTH_APPS,
+    ZM_APPS,
 )
 
 llvmrawprogram(
@@ -40,7 +41,8 @@ mkcpmfs(
     | PASCAL_APPS
     | SERIAL_APPS
     | SERIAL_SCREEN_APPS
-    | FORTH_APPS,
+    | FORTH_APPS
+    | ZM_APPS,
 )
 
 mkcpmfs(
