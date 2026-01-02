@@ -206,6 +206,16 @@ static uint16_t object_table;
 static uint8_t alphabet;
 static uint8_t alphabet_reset;
 static uint8_t alphabet_prev;
+static uint8_t zalph[3][26] = {{'a','b','c','d','e','f','g','h','i','j','k',
+                                'l','m','n','o','p','q','r','s','t','u','v',
+                                'w','x','y','z'},
+                               {'A','B','C','D','E','F','G','H','I','J','K',
+                                'L','M','N','O','P','Q','R','S','T','U','V',
+                                'W','X','Y','Z'},
+                               {' ','\n','0','1','2','3','4','5','6','7','8',
+                                '9','.',',','!','?','_','#','\'','\"','/',
+                                '\\','-',':','(',')'}};
+
 
 static uint8_t abbrev_print;
 static uint8_t abbrev_table;
@@ -356,7 +366,7 @@ static uint16_t zm_read16(uint16_t a){
     return ((uint16_t)zm_read8(a)<<8)|zm_read8(a+1);
 }
 
-static inline void zm_write8(uint16_t a,uint8_t v){
+static void zm_write8(uint16_t a,uint8_t v){
     if(a>=dynamic_size) {
         crlf();
         print_hex(a);
@@ -371,8 +381,8 @@ static inline void zm_write8(uint16_t a,uint8_t v){
  * ============================================================
  */
 
-static inline void push(int16_t v){stack[sp++]=v;}
-static inline int16_t pop(void){return stack[--sp];}
+static void push(int16_t v){stack[sp++]=v;}
+static int16_t pop(void){return stack[--sp];}
 
 static uint16_t get_var(uint8_t v){
 //    cpm_printstring("get_var - v:");
@@ -487,49 +497,39 @@ static void print_zstring(uint16_t addr){
     while(1){
         uint16_t w=zm_read16(addr);
         addr+=2;
-        //cpm_printstring("zstring decode - word: ");
-        //print_hex(w);
-        //spc();
-    
+        
         for(int i=10;i>=0;i-=5){
             uint8_t c=(w>>i)&0x1F;
-            //print_hex(c);
-            //spc();
-            //printi(alphabet);
-            //spc();
-            if(alphabet == 0) base = 'a'-6;
-            else if(alphabet == 1) base = 'A'-6;
-            else if(alphabet == 2) base = '0'-8;
-            else base = 'a' - 6;
-
-            if(alphabet_reset) {
-                alphabet = alphabet_prev;
-                alphabet_reset = 0;
-            }
-
-
+           
             if(abbrev_print == 1) {
                 uint16_t string_addr;
+                alphabet = 0;
+                alphabet_prev = 0;
                 string_addr = zm_read16(abbrev_base+(((abbrev_table<<5)+c)<<1));
                 abbrev_print = 0;
                 print_zstring(string_addr<<1);
+                alphabet = 0;
+                alphabet_prev = 0;
             }
             else if(c>=6) {
-                //crlf();
-                putc(base+c);
-                //crlf();
+                putc(zalph[alphabet][c-6]);
+                if(alphabet_reset) {
+                    alphabet = alphabet_prev;
+                    alphabet_reset = 0;
+            
+                }
             } 
             else if(c==4) {
                 alphabet_prev = alphabet;
                 alphabet = (alphabet + 1) % 3;
                 alphabet_reset = 1;
-            }
+           }
             else if(c==5) {
                 alphabet_prev = alphabet;
                 if(alphabet == 0) alphabet = 2;
                 else alphabet--;
                 alphabet_reset = 1;
-            }
+             }
             else if((c>0) && (c<4)) {
                 abbrev_print = 1;
                 abbrev_table = c-1;
@@ -537,8 +537,10 @@ static void print_zstring(uint16_t addr){
             else if(c==0) putc(' ');
 
         }
-        //crlf();
-        if(w&0x8000) break;
+        if(w&0x8000) {
+            alphabet = alphabet_prev = 0;
+            break;
+        }
     }
 }
 
@@ -570,7 +572,7 @@ static void dict_init(void){
 }
 
 
-static uint16_t dict_lookup(const char *w,uint8_t len){
+/*static uint16_t dict_lookup(const char *w,uint8_t len){
     uint16_t base = dict_addr + 2;
     for(uint16_t i=0;i<dict_entry_count;i++){
         uint16_t a = base + i*dict_entry_len;
@@ -582,7 +584,82 @@ static uint16_t dict_lookup(const char *w,uint8_t len){
         if(match) return a;
     }
     return 0;
+}*/
+
+static uint8_t encode_a2(char c)
+{
+    /* A2 table for v1–v3 */
+    const char *a2 = " \n0123456789.,!?_#'\"/\\-:()";
+    for (uint8_t i = 0; a2[i]; i++) {
+        if (a2[i] == c)
+            return i;
+    }
+    return 0; /* space */
 }
+
+void encode_zchars(const char *s, uint8_t zchars[6])
+{
+    uint8_t zi = 0;
+
+    while (*s && zi < 6) {
+        char c = *s++;
+
+        /* force lowercase */
+        if (c >= 'A' && c <= 'Z')
+            c = c - 'A' + 'a';
+
+        if (c >= 'a' && c <= 'z') {
+            zchars[zi++] = (c - 'a') + 6;
+        }
+        else {
+            /* shift to A2 */
+            if (zi < 6)
+                zchars[zi++] = 5;
+            if (zi < 6)
+                zchars[zi++] = encode_a2(c);
+        }
+    }
+
+    /* pad with spaces (A2 space = shift 5 + 0, but Inform pads with 5) */
+    while (zi < 6)
+        zchars[zi++] = 5;
+}
+
+uint16_t dict_lookup(const char *word)
+{
+    uint8_t zchars[6];
+    encode_zchars(word, zchars);
+
+    uint16_t w0 = (zchars[0] << 10) | (zchars[1] << 5) | zchars[2];
+    uint16_t w1 = (zchars[3] << 10) | (zchars[4] << 5) | zchars[5] | 0x8000;
+    cpm_printstring("dict lookup ");
+    print_hex(w0);
+    spc();
+    print_hex(w1);
+    crlf();
+    uint16_t dict = dict_addr;
+    uint8_t sep = zm_read8(dict++);
+    dict += sep;
+
+    uint8_t entry_len = zm_read8(dict++);
+    uint16_t count = zm_read16(dict);
+    dict += 2;
+    cpm_printstring("sep: ");
+    printi(sep);
+    cpm_printstring(" entry_len: ");
+    printi(entry_len);
+    cpm_printstring(" count: ");
+    printi(count);
+    crlf();
+    for (uint16_t i = 0; i < count; i++) {
+        uint16_t e = dict + i * entry_len;
+        if (zm_read16(e) == w0 && zm_read16(e + 2) == w1)
+            return e;
+    }
+
+    return 0;
+}
+
 
 
 // Tokenization
@@ -612,7 +689,7 @@ static uint8_t tokenize(char *in, uint16_t parse_buf, uint16_t text_buf)
         while(in[i] && !is_sep(in[i]) && len<6)
             word[len++]=in[i++];
 
-        uint16_t dict = dict_lookup(word,len);
+        uint16_t dict = dict_lookup(word);
 
         uint16_t entry = parse_buf + 2 + count*4;
         zm_write8(entry, dict>>8);
@@ -630,7 +707,7 @@ static uint8_t tokenize(char *in, uint16_t parse_buf, uint16_t text_buf)
 
 // Objects
 
-static inline uint16_t obj_addr(uint8_t obj)
+static uint16_t obj_addr(uint8_t obj)
 {
     return object_table + 62 + (obj - 1) * 9;
 }
@@ -1094,9 +1171,9 @@ static void step(void){
     decode_operands(zm_read8(pc++));
     uint8_t var_opcode = op & 0x1f;
     if((op & 0xE0)==0xE0) var_opcode += 0x20;
-    cpm_printstring("Var opcode: ");
-    print_hex(var_opcode);
-    crlf();
+    //cpm_printstring("Var opcode: ");
+    //print_hex(var_opcode);
+    //crlf();
     switch(var_opcode) {
     /*case OPV_CALL:
         cpm_printstring("Call - ");
