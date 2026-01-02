@@ -204,8 +204,6 @@ static uint16_t dict_entry_count;
 static uint16_t object_table;
 
 static uint8_t alphabet;
-static uint8_t alphabet_reset;
-static uint8_t alphabet_prev;
 static uint8_t zalph[3][26] = {{'a','b','c','d','e','f','g','h','i','j','k',
                                 'l','m','n','o','p','q','r','s','t','u','v',
                                 'w','x','y','z'},
@@ -493,7 +491,6 @@ static void branch(uint8_t cond){
  */
 
 static void print_zstring(uint16_t addr){
-    uint8_t base;
     while(1){
         uint16_t w=zm_read16(addr);
         addr+=2;
@@ -504,32 +501,21 @@ static void print_zstring(uint16_t addr){
             if(abbrev_print == 1) {
                 uint16_t string_addr;
                 alphabet = 0;
-                alphabet_prev = 0;
                 string_addr = zm_read16(abbrev_base+(((abbrev_table<<5)+c)<<1));
                 abbrev_print = 0;
                 print_zstring(string_addr<<1);
                 alphabet = 0;
-                alphabet_prev = 0;
             }
             else if(c>=6) {
                 putc(zalph[alphabet][c-6]);
-                if(alphabet_reset) {
-                    alphabet = alphabet_prev;
-                    alphabet_reset = 0;
-            
-                }
+                alphabet = 0;
             } 
             else if(c==4) {
-                alphabet_prev = alphabet;
-                alphabet = (alphabet + 1) % 3;
-                alphabet_reset = 1;
-           }
+                alphabet = 1;
+            }
             else if(c==5) {
-                alphabet_prev = alphabet;
-                if(alphabet == 0) alphabet = 2;
-                else alphabet--;
-                alphabet_reset = 1;
-             }
+                alphabet = 2;
+            }
             else if((c>0) && (c<4)) {
                 abbrev_print = 1;
                 abbrev_table = c-1;
@@ -538,7 +524,7 @@ static void print_zstring(uint16_t addr){
 
         }
         if(w&0x8000) {
-            alphabet = alphabet_prev = 0;
+            alphabet = 0;
             break;
         }
     }
@@ -558,33 +544,30 @@ static void print_num(int16_t v){
 
 // Dictionary
 static void dict_init(void){
-    dict_addr = zm_read16(0x08);
+    dict_addr = hdr[0x08]<<8 | hdr[0x09];
     cpm_printstring("Dict addr ");
     print_hex(dict_addr);
     dict_sep_count = zm_read8(dict_addr++);
     cpm_printstring(" Dict sep cnt ");
     printi(dict_sep_count);
-    for(uint8_t i=0;i<dict_sep_count;i++)
+    for(uint8_t i=0;i<dict_sep_count;i++) {
         dict_seps[i]=zm_read8(dict_addr++);
+        spc();
+        putc(dict_seps[i]);
+        spc();
+    }
 
     dict_entry_len   = zm_read8(dict_addr++);
+    crlf();
+    cpm_printstring("Dict entry length: ");
+    print_hex(dict_entry_len);
+    crlf();
     dict_entry_count = zm_read16(dict_addr);
+    cpm_printstring("Dict entry count:" );
+    print_hex(dict_entry_count);
+    crlf();
 }
 
-
-/*static uint16_t dict_lookup(const char *w,uint8_t len){
-    uint16_t base = dict_addr + 2;
-    for(uint16_t i=0;i<dict_entry_count;i++){
-        uint16_t a = base + i*dict_entry_len;
-        uint8_t match=1;
-        for(uint8_t j=0;j<len;j++){
-            char c = zm_read8(a+j);
-            if(c!=w[j]){ match=0; break; }
-        }
-        if(match) return a;
-    }
-    return 0;
-}*/
 
 static uint8_t encode_a2(char c)
 {
@@ -633,17 +616,17 @@ uint16_t dict_lookup(const char *word)
     uint16_t w0 = (zchars[0] << 10) | (zchars[1] << 5) | zchars[2];
     uint16_t w1 = (zchars[3] << 10) | (zchars[4] << 5) | zchars[5] | 0x8000;
     cpm_printstring("dict lookup ");
+    cpm_printstring(word);
     print_hex(w0);
     spc();
     print_hex(w1);
     crlf();
     uint16_t dict = dict_addr;
-    uint8_t sep = zm_read8(dict++);
-    dict += sep;
+    uint8_t sep = dict_sep_count;
 
-    uint8_t entry_len = zm_read8(dict++);
-    uint16_t count = zm_read16(dict);
-    dict += 2;
+    uint8_t entry_len = dict_entry_len;
+    uint16_t count = dict_entry_count;
+    
     cpm_printstring("sep: ");
     printi(sep);
     cpm_printstring(" entry_len: ");
@@ -651,10 +634,21 @@ uint16_t dict_lookup(const char *word)
     cpm_printstring(" count: ");
     printi(count);
     crlf();
-    for (uint16_t i = 0; i < count; i++) {
-        uint16_t e = dict + i * entry_len;
-        if (zm_read16(e) == w0 && zm_read16(e + 2) == w1)
+    
+    uint16_t e = dict_addr+2;
+
+    cpm_printstring("Starting search at address ");
+    print_hex(e);
+    crlf();
+    for (uint16_t i = 0; i < dict_entry_count; i++) {
+        //uint16_t e = dict + i * entry_len;
+        e += dict_entry_len;
+        if (zm_read16(e) == w0 && zm_read16(e + 2) == w1) {
+            cpm_printstring("Found match at address");
+            print_hex(e);
             return e;
+        
+        }
     }
 
     return 0;
@@ -683,7 +677,7 @@ static uint8_t tokenize(char *in, uint16_t parse_buf, uint16_t text_buf)
         if(!in[i]) break;
 
         uint8_t start=i;
-        char word[10];
+        char word[10]={0};
         uint8_t len=0;
 
         while(in[i] && !is_sep(in[i]) && len<6)
@@ -1008,6 +1002,7 @@ static void step(void){
         }
         
         default:
+            crlf();
             printi(op);
             fatal(" - Non-implemented opcode!!!"); 
         }
@@ -1108,6 +1103,7 @@ static void step(void){
             break;
         }
         default:
+            crlf();
             printi(op); 
             fatal(" - Non-implemented opcode!!!");
         }
@@ -1162,6 +1158,7 @@ static void step(void){
         case OP0_QUIT:
             cpm_warmboot();
         default:
+            crlf();
             printi(op);
             fatal(" - Non-implemented opcode!!!");
         }
@@ -1308,6 +1305,7 @@ static void step(void){
         store_result(operands[0] & operands[1]);
         break;
     default:
+        crlf();
         printi(op); 
         fatal(" - Non-implemented opcode!!!");
  
@@ -1367,7 +1365,7 @@ int main(int agrv, char **argv){
     dict_init();
     object_table = (hdr[0x0a]<<8)|hdr[0x0b];
 
-    alphabet = alphabet_prev = alphabet_reset = 0;
+    alphabet = 0;
     abbrev_print = 0;
     abbrev_table = 0;
     abbrev_base = (hdr[0x18]<<8)|hdr[0x19];
