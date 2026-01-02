@@ -206,6 +206,8 @@ static uint16_t dict_entry_count;
 static uint16_t object_table;
 
 static uint8_t alphabet;
+static uint8_t zscii_esc=0;
+static uint8_t zscii_high;
 static uint8_t zalph[3][26] = {{'a','b','c','d','e','f','g','h','i','j','k',
                                 'l','m','n','o','p','q','r','s','t','u','v',
                                 'w','x','y','z'},
@@ -537,6 +539,19 @@ static void print_zstring(uint32_t addr){
                 string_addr = zm_read16(abbrev_base+(((abbrev_table<<5)+c)<<1));
                 abbrev_print = 0;
                 print_zstring(string_addr<<1);
+                alphabet = 0;
+            }
+            else if(zscii_esc == 1) {
+                zscii_high = c;
+                zscii_esc = 2;
+            }
+            else if(zscii_esc == 2) {
+                putc((zscii_high << 5) | c);
+                zscii_esc = 0;
+            }
+            else if(alphabet == 2 && c==6) {
+                // ZSCII escape
+                zscii_esc = 1;
                 alphabet = 0;
             }
             else if(c>=6) {
@@ -944,11 +959,11 @@ static uint16_t rng_next(void)
 
 static void step(void){
     uint8_t op=zm_read8(pc++);
-    cpm_printstring("OP: ");
+    /*cpm_printstring("OP: ");
     print_hex(op);
     cpm_printstring(" PC: ");
     print_hex(pc);
-    crlf();
+    crlf();*/
     /* -------- 2OP -------- */
     if(op<0x80){
         uint8_t t1=(op&0x40)?OP_VAR:OP_SMALL;
