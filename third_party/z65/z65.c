@@ -186,8 +186,8 @@ static uint16_t dynamic_size;
 static Page page_cache[NUM_PAGES];
 static uint8_t next_victim;
 
-static uint16_t pc;
-static uint16_t initial_pc;
+static uint32_t pc;
+static uint32_t initial_pc;
 static int16_t stack[STACK_SIZE];
 static uint16_t sp;
 
@@ -430,9 +430,11 @@ static uint16_t get_var(uint8_t v){
         return stack;
     }
     if(v<16) {
-   //     cpm_printstring("local: ");
-   //     print_hex(frames[fp-1].locals[v-1]);
-  //      crlf();
+        cpm_printstring("local ");
+        printi(v);
+        cpm_printstring(": ");
+        print_hex(frames[fp-1].locals[v-1]);
+        crlf();
         return frames[fp-1].locals[v-1];
     }
         //uint16_t a=zm_read16(0x0C)+2*(v-16);
@@ -454,7 +456,14 @@ static void set_var(uint8_t v,uint16_t val){
 //    print_hex(val);
 //    crlf();
     if(v==0) push(val);
-    else if(v<16) frames[fp-1].locals[v-1]=val;
+    else if(v<16) {
+        cpm_printstring("Setvar local ");
+        printi(v);
+        spc();
+        print_hex(val);
+        crlf();
+        frames[fp-1].locals[v-1]=val;
+    }
     else{
         //uint16_t a=zm_read16(0x0C)+2*(v-16);
         uint16_t a = (hdr[0x0c]<<8) + hdr[0x0d] + 2*(v-16);
@@ -493,6 +502,8 @@ static void decode_operands(uint8_t spec){
         uint8_t t=(spec>>s)&3;
         if(t==OP_OMIT) break;
         operands[operand_count++]=read_operand(t);
+        cpm_printstring("Operand ");
+        printi(operand_count);
     }
 }
 
@@ -504,16 +515,36 @@ static void decode_operands(uint8_t spec){
 
 static void branch(uint8_t cond){
     uint8_t b=zm_read8(pc++);
-    uint8_t sense=b&0x80;
+    //uint8_t sense=b&0x80;
     int16_t off;
 
     if(b&0x40) off=b&0x3F;
     else{
         off=((b&0x3F)<<8)|zm_read8(pc++);
+        // Sign extension for 14-bit long offset
         if(off&0x2000) off|=0xC000;
     }
 
-    if((cond!=0)==(sense!=0)){
+    uint8_t take_branch = 0;
+
+    if(b & 0x80) {
+        if(cond) take_branch = 1;
+    }
+    else {
+        if(!cond) take_branch = 1;
+    }
+
+    cpm_printstring("Branch cond: ");
+    print_hex(cond);
+    cpm_printstring(" sense: ");
+    print_hex(b & 0x80);
+    cpm_printstring(" take_branch: ");
+    print_hex(take_branch);
+    cpm_printstring(" offset: ");
+    print_hex(off);
+    crlf();
+
+    if(take_branch) {
         if(off==0) push(0),pc=frames[--fp].return_pc;
         else if(off==1) push(1),pc=frames[--fp].return_pc;
         else pc+=off-2;
@@ -593,27 +624,28 @@ static void print_num(int16_t v){
 // Dictionary
 static void dict_init(void){
     dict_addr = hdr[0x08]<<8 | hdr[0x09];
-    cpm_printstring("Dict addr ");
-    print_hex(dict_addr);
+//    cpm_printstring("Dict addr ");
+//    print_hex(dict_addr);
     dict_sep_count = zm_read8(dict_addr++);
-    cpm_printstring(" Dict sep cnt ");
-    printi(dict_sep_count);
+//    cpm_printstring(" Dict sep cnt ");
+//    printi(dict_sep_count);
     for(uint8_t i=0;i<dict_sep_count;i++) {
         dict_seps[i]=zm_read8(dict_addr++);
-        spc();
-        putc(dict_seps[i]);
-        spc();
+        //spc();
+        //putc(dict_seps[i]);
+        //spc();
     }
 
     dict_entry_len   = zm_read8(dict_addr++);
-    crlf();
-    cpm_printstring("Dict entry length: ");
-    print_hex(dict_entry_len);
-    crlf();
+    //crlf();
+    //cpm_printstring("Dict entry length: ");
+    //print_hex(dict_entry_len);
+    //crlf();
+    
     dict_entry_count = zm_read16(dict_addr);
-    cpm_printstring("Dict entry count:" );
-    print_hex(dict_entry_count);
-    crlf();
+    //cpm_printstring("Dict entry count:" );
+    //print_hex(dict_entry_count);
+    //crlf();
 }
 
 
@@ -663,37 +695,32 @@ uint16_t dict_lookup(const char *word)
 
     uint16_t w0 = (zchars[0] << 10) | (zchars[1] << 5) | zchars[2];
     uint16_t w1 = (zchars[3] << 10) | (zchars[4] << 5) | zchars[5] | 0x8000;
-    cpm_printstring("dict lookup ");
+    /*cpm_printstring("dict lookup ");
     cpm_printstring(word);
     print_hex(w0);
     spc();
     print_hex(w1);
-    crlf();
-    uint16_t dict = dict_addr;
-    uint8_t sep = dict_sep_count;
-
-    uint8_t entry_len = dict_entry_len;
-    uint16_t count = dict_entry_count;
+    crlf();*/
     
-    cpm_printstring("sep: ");
-    printi(sep);
-    cpm_printstring(" entry_len: ");
-    printi(entry_len);
-    cpm_printstring(" count: ");
-    printi(count);
-    crlf();
+    //cpm_printstring("sep: ");
+    //printi(sep);
+    //cpm_printstring(" entry_len: ");
+    //printi(entry_len);
+    //cpm_printstring(" count: ");
+    //printi(count);
+    //crlf();
     
     uint16_t e = dict_addr+2;
 
-    cpm_printstring("Starting search at address ");
-    print_hex(e);
+    //cpm_printstring("Starting search at address ");
+    //print_hex(e);
     crlf();
     for (uint16_t i = 0; i < dict_entry_count; i++) {
         //uint16_t e = dict + i * entry_len;
         e += dict_entry_len;
         if (zm_read16(e) == w0 && zm_read16(e + 2) == w1) {
-            cpm_printstring("Found match at address");
-            print_hex(e);
+            //cpm_printstring("Found match at address");
+            //print_hex(e);
             return e;
         
         }
@@ -882,18 +909,18 @@ static uint8_t obj_get_prop_len(uint16_t addr){
 }
 
 static void obj_put_prop(uint8_t obj, uint8_t prop, uint16_t val){
-    cpm_printstring("obj_put_prop - obj: ");
+    /*cpm_printstring("obj_put_prop - obj: ");
     print_hex(obj);
     cpm_printstring(" prop: ");
     print_hex(prop);
     cpm_printstring(" val: ");
     print_hex(val);
-    
+    */
     uint16_t p = obj_find_prop(obj, prop);
     
-    cpm_printstring(" p: ");
-    print_hex(p);
-    crlf();
+    //cpm_printstring(" p: ");
+    //print_hex(p);
+    //crlf();
     
     if (!p) {
         // property must exist
@@ -938,7 +965,7 @@ static void restart(void)
     sp = fp = 0;
 }
 
-static inline uint16_t unpack_routine(uint16_t p)
+static inline uint32_t unpack_routine(uint16_t p)
 {
     // v1-v3 - only version supported for now
     return p << 1;
@@ -959,11 +986,11 @@ static uint16_t rng_next(void)
 
 static void step(void){
     uint8_t op=zm_read8(pc++);
-    /*cpm_printstring("OP: ");
+    cpm_printstring("OP: ");
     print_hex(op);
     cpm_printstring(" PC: ");
     print_hex(pc);
-    crlf();*/
+    crlf();
     /* -------- 2OP -------- */
     if(op<0x80){
         uint8_t t1=(op&0x40)?OP_VAR:OP_SMALL;
@@ -1001,6 +1028,8 @@ static void step(void){
             break;
             }
         case OP2_DEC_CHK:
+            cpm_printstring("DEC_CHK");
+            crlf();
             operands[0]--;
             set_var(var_num,operands[0]);
             branch((int16_t)operands[0]<(int16_t)operands[1]);
@@ -1013,6 +1042,8 @@ static void step(void){
             //cpm_printstring(" Var: ");
             //print_hex(var_num);
             //crlf(); 
+            cpm_printstring("INC_CHK");
+            crlf();
             operands[0]++;
             set_var(var_num,operands[0]);
             branch((int16_t)operands[0]>(int16_t)operands[1]);
@@ -1144,18 +1175,28 @@ static void step(void){
             break;
         }
         case OP1_GET_CHILD: {
+            cpm_printstring("GET_CHILD for object ");
+            print_hex(operands[0]);
             uint8_t result;
             if(operands[0]==0) result = 0;
             else result = obj_child(operands[0]);
             store_result(result);
+            cpm_printstring(" CHILD: ");
+            print_hex(result);
+            crlf();
             branch(result!=0);
             break;
         }
         case OP1_GET_SIBLING: {
+            cpm_printstring("GET_SIBLING for object ");
+            print_hex(operands[0]);
+ 
             uint8_t result;
             if(operands[0]==0) result = 0;
             else result = obj_sibling(operands[0]);
             store_result(result);
+            cpm_printstring(" SIBLING ");
+            print_hex(result);
             branch(result!=0);
             break;
         }
@@ -1184,6 +1225,8 @@ static void step(void){
         //    z_ret(operands[0]);
         //    break;
         case OP1_JZ:
+            cpm_printstring("JZ - arg ");
+            print_hex(operands[0]);
             branch(operands[0]==0);
             break;
         case OP1_PRINT_PADDR: {
@@ -1304,24 +1347,34 @@ static void step(void){
         f->store_var = sv;
         f->return_pc = pc;
 
-        uint16_t addr = unpack_routine(operands[0]);
+        uint32_t addr = unpack_routine(operands[0]);
         //cpm_printstring("CALL to address ");
         //print_hex(addr);
         //crlf();
         f->num_locals = zm_read8(addr++);
 
-        for (uint8_t i = 0; i < f->num_locals; i++)
-            f->locals[i] = zm_read16(addr + 2*i);
+        for (uint8_t i = 0; i < f->num_locals; i++) {
+            f->locals[i] = zm_read16(addr);
+            addr += 2;
+        }
 
         /* overwrite locals with arguments */
         uint8_t argc = operand_count - 1;
         if (argc > f->num_locals)
             argc = f->num_locals;
+        cpm_printstring("Argc: ");
+        printi(argc);
+        for (uint8_t i = 0; i < argc; i++){
+            //f->locals[i] = operands[i + 1];
+            f->locals[i] = operands[i + 1]; 
+            cpm_printstring("locals ");
+            printi(i);
+            spc();
+            print_hex(f->locals[i]);
+            crlf();
+        }
 
-        for (uint8_t i = 0; i < argc; i++)
-            f->locals[i] = operands[i + 1];
-
-        pc = addr + 2 * f->num_locals;
+        pc = addr; // + 2 * f->num_locals;
         break;
     }
     case OPV_JE:
@@ -1386,13 +1439,13 @@ static void step(void){
         tokenize(line,parse,text);
         break; }
     case OPV_PUT_PROP:
-            cpm_printstring("Putprop - ");
+            /*cpm_printstring("Putprop - ");
             print_hex(operands[0]);
             spc();
             print_hex(operands[1]);
             spc();
             print_hex(operands[2]);
-            crlf();
+            crlf();*/
             obj_put_prop((uint8_t)operands[0],(uint8_t)operands[1],
                          operands[2]);
         break;
@@ -1439,16 +1492,11 @@ static void step(void){
  */
 
 int main(int agrv, char **argv){
-    /*
-    story_fcb.drive=0;
-    story_fcb.name[0]='S';story_fcb.name[1]='T';story_fcb.name[2]='O';
-    story_fcb.name[3]='R';story_fcb.name[4]='Y';story_fcb.name[5]=' ';
-    story_fcb.name[6]=' ';story_fcb.name[7]=' ';
-    story_fcb.ext[0]='Z';story_fcb.ext[1]='3';story_fcb.ext[2]=' ';
-    */
+    cpm_printstring("z65 - Z-machine v3 interpreter");
+    crlf();
+    crlf();
+   
     // Get story filename from commandline
-
-    //cpm_fcb.cr = 0;
     if(cpm_open_file(&cpm_fcb))
         fatal("Could not open input file!");
 
@@ -1456,15 +1504,15 @@ int main(int agrv, char **argv){
     //bdos(BDOS_READ_SEQ,&story_fcb);
     cpm_read_sequential(&cpm_fcb);
     //uint8_t *hdr=dma;
-
+    
     dynamic_size=(hdr[0x0e]<<8)|hdr[0x0f];
-    cpm_printstring("Dynamic size: ");
+    //cpm_printstring("Dynamic size: ");
     
     for(uint16_t i=0; i<DYNAMIC_MEM_MAX; i++)
         dynamic_mem[i] = 0;
 
-    printi(dynamic_size);
-    crlf();
+    //printi(dynamic_size);
+    //crlf();
     if(dynamic_size>DYNAMIC_MEM_MAX) while(1);
 
     for(uint16_t i=0; i<128; i++)
@@ -1490,8 +1538,8 @@ int main(int agrv, char **argv){
     abbrev_table = 0;
     abbrev_base = (hdr[0x18]<<8)|hdr[0x19];
 
-    cpm_printstring("PC: ");
-    print_hex(pc);
-    crlf();
+    //cpm_printstring("PC: ");
+    //print_hex(pc);
+    //crlf();
     for(;;) step();
 }
