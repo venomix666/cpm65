@@ -92,12 +92,15 @@
 #define OP0_POP             0x09
 #define OP0_QUIT            0x0A
 #define OP0_NEW_LINE        0x0B
+#define OP0_VERIFY          0x0D
 
 /* VAR */
 #define OPV_CALL            0x00
 #define OPV_JE              0x01
 #define OPV_JL              0x02
 #define OPV_JG              0x03
+#define OPV_INC_CHK         0x05
+#define OPV_TEST            0x07
 #define OPV_STOREW          0x21
 #define OPV_STOREB          0x22
 #define OPV_PUT_PROP        0x23
@@ -438,11 +441,11 @@ static uint16_t get_var(uint8_t v){
         return stack;
     }
     if(v<16) {
-        cpm_printstring("local ");
-        printi(v);
-        cpm_printstring(": ");
-        print_hex(frames[fp-1].locals[v-1]);
-        crlf();
+        //cpm_printstring("local ");
+        //printi(v);
+        //cpm_printstring(": ");
+        //print_hex(frames[fp-1].locals[v-1]);
+        //crlf();
         return frames[fp-1].locals[v-1];
     }
         //uint16_t a=zm_read16(0x0C)+2*(v-16);
@@ -472,11 +475,11 @@ static void set_var(uint8_t v,uint16_t val){
         //crlf();
     }
     else if(v<16) {
-        cpm_printstring("Setvar local ");
-        printi(v);
-        spc();
-        print_hex(val);
-        crlf();
+        //cpm_printstring("Setvar local ");
+        //printi(v);
+        //spc();
+        //print_hex(val);
+        //crlf();
         frames[fp-1].locals[v-1]=val;
     }
     else{
@@ -745,7 +748,7 @@ uint16_t dict_lookup(const char *word)
 
     //cpm_printstring("Starting search at address ");
     //print_hex(e);
-    crlf();
+    //crlf();
     for (uint16_t i = 0; i < dict_entry_count; i++) {
         //uint16_t e = dict + i * entry_len;
         e += dict_entry_len;
@@ -765,9 +768,9 @@ uint16_t dict_lookup(const char *word)
 // Tokenization
 
 static uint8_t is_sep(char c){
-    cpm_printstring("is_sep: ");
-    cpm_conout(c);
-    crlf();
+    //cpm_printstring("is_sep: ");
+    //cpm_conout(c);
+    //crlf();
     for(uint8_t i=0;i<dict_sep_count;i++)
         if(c==dict_seps[i]) return 1;
     return c==' ';
@@ -800,15 +803,15 @@ static uint8_t tokenize(char *in, uint16_t parse_buf, uint16_t text_buf)
         uint16_t dict = dict_lookup(word);
 
         uint16_t entry = parse_buf + 2 + count*4;
-        crlf();
-        cpm_printstring("Writing entry to parse_buf - ");
-        print_hex(dict>>8);
-        spc();
-        print_hex(dict & 0xff);
-        spc();
-        print_hex(len);
-        spc();
-        print_hex(start+1); 
+        //crlf();
+        //cpm_printstring("Writing entry to parse_buf - ");
+        //print_hex(dict>>8);
+        //spc();
+        //print_hex(dict & 0xff);
+        //spc();
+        //print_hex(len);
+        //spc();
+        //print_hex(start+1); 
         zm_write8(entry, dict>>8);
         zm_write8(entry+1, dict & 0xff);
         zm_write8(entry+2, len);
@@ -821,10 +824,10 @@ static uint8_t tokenize(char *in, uint16_t parse_buf, uint16_t text_buf)
 
     uint8_t x;
     crlf();
-    for(x=0; x<(count<<2)+2; x++) {
-        print_hex(zm_read8(parse_buf+x));
-        crlf();
-    }
+    //for(x=0; x<(count<<2)+2; x++) {
+    //    print_hex(zm_read8(parse_buf+x));
+    //    crlf();
+    //}
 
     return count;
 }
@@ -1022,11 +1025,11 @@ static uint16_t rng_next(void)
 
 static void step(void){
     uint8_t op=zm_read8(pc++);
-    cpm_printstring("OP: ");
-    print_hex(op);
-    cpm_printstring(" PC: ");
-    print_hex_32(pc);
-    crlf();
+    //cpm_printstring("OP: ");
+    //print_hex(op);
+    //cpm_printstring(" PC: ");
+    //print_hex_32(pc);
+    //crlf();
     /* -------- 2OP -------- */
     if(op<0x80){
         uint8_t t1=(op&0x40)?OP_VAR:OP_SMALL;
@@ -1064,8 +1067,8 @@ static void step(void){
             break;
             }
         case OP2_DEC_CHK:
-            cpm_printstring("DEC_CHK");
-            crlf();
+            //cpm_printstring("DEC_CHK");
+            //crlf();
             operands[0]--;
             set_var(var_num,operands[0]);
             branch((int16_t)operands[0]<(int16_t)operands[1]);
@@ -1078,8 +1081,11 @@ static void step(void){
             //cpm_printstring(" Var: ");
             //print_hex(var_num);
             //crlf(); 
-            cpm_printstring("INC_CHK");
-            crlf();
+            //cpm_printstring("INC_CHK op1: ");
+            //print_hex(operands[0]);
+            //cpm_printstring("Var num: ");
+            //print_hex(var_num);
+            //crlf();
             operands[0]++;
             set_var(var_num,operands[0]);
             branch((int16_t)operands[0]>(int16_t)operands[1]);
@@ -1144,11 +1150,11 @@ static void step(void){
         }
 
         case OP2_GET_NEXT_PROP: {
-            cpm_printstring("GET_NEXT_PROP - op1: ");
-            print_hex(operands[0]);
-            cpm_printstring(" op2: ");
-            print_hex(operands[1]);
-            crlf();
+            //cpm_printstring("GET_NEXT_PROP - op1: ");
+            //print_hex(operands[0]);
+            //cpm_printstring(" op2: ");
+            //print_hex(operands[1]);
+            //crlf();
             uint8_t obj = (uint8_t)operands[0];
             uint8_t prop = (uint8_t)operands[1];
             uint16_t addr;
@@ -1313,7 +1319,7 @@ static void step(void){
         //    z_ret(operands[0]);
         //    break;
         case OP1_JZ:
-            cpm_printstring("JZ - arg ");
+            //cpm_printstring("JZ - arg ");
             print_hex(operands[0]);
             branch(operands[0]==0);
             break;
@@ -1384,6 +1390,11 @@ static void step(void){
 
         case OP0_QUIT:
             cpm_warmboot();
+            break;
+        case OP0_VERIFY:
+            // Not supported
+            pc++;
+            break;
         default:
             crlf();
             printi(op);
@@ -1490,7 +1501,9 @@ static void step(void){
     case OPV_JG:
         branch((int16_t)operands[0] > (int16_t)operands[1]);
         break;
-
+    case OPV_TEST:
+        branch((operands[0] & operands[1]) == operands[1]);
+        break;
     case OPV_STOREW:
         //cpm_printstring("STOREW: ");
         //printi(operands[0]);
