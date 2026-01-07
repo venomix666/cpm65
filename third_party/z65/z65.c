@@ -77,7 +77,7 @@
 #define OP1_JUMP          0x0C
 #define OP1_PRINT_PADDR   0x0D
 #define OP1_LOAD          0x0E
-#define OP1_CALL_1N       0x0F
+#define OP1_NOT           0x0F
 
 /* 0OP */
 #define OP0_RTRUE           0x00
@@ -108,11 +108,13 @@
 #define OPV_AND             0x09
 #define OPV_OR              0x0A
 #define OPV_NOT             0x0B
+#define OPV_LOADW           0x0F
 #define OPV_STORE           0x0D
 #define OPV_CALL_EXT        0x20
 #define OPV_PUSH            0x28
 #define OPV_PULL            0x29
-
+#define OPV_LOADB           0x50
+#define OPV_MUL             0x56            
 
 
 /* ============================================================
@@ -161,10 +163,11 @@
  */
 
 typedef struct {
-    uint16_t return_pc;
+    uint32_t return_pc;
     uint8_t store_var;
     uint8_t num_locals;
     uint16_t locals[MAX_LOCALS];
+    uint16_t saved_sp;
 } CallFrame;
 
 typedef struct {
@@ -225,6 +228,9 @@ static uint16_t abbrev_base;
 
 static uint16_t rng_state = 1;
 static uint8_t rng_enabled = 1;
+
+static void z_ret(uint16_t v);
+ 
 
 /* ============================================================
  * Console
@@ -424,8 +430,10 @@ static uint16_t get_var(uint8_t v){
         uint16_t stack;
         stack = pop();
         //crlf();
-        //cpm_printstring("stack: ");
+        //cpm_printstring("stack pop: ");
         //print_hex(stack);
+        //cpm_printstring(" SP: ");
+        //print_hex(sp);
         //crlf();
         return stack;
     }
@@ -455,7 +463,14 @@ static void set_var(uint8_t v,uint16_t val){
 //    cpm_printstring(" val: ");
 //    print_hex(val);
 //    crlf();
-    if(v==0) push(val);
+    if(v==0) {
+        push(val);
+        //cpm_printstring("stack push: ");
+        //print_hex(val);
+        //cpm_printstring(" SP: ");
+        //print_hex(sp);
+        //crlf();
+    }
     else if(v<16) {
         cpm_printstring("Setvar local ");
         printi(v);
@@ -489,10 +504,16 @@ static uint16_t operands[MAX_OPERANDS];
 static uint8_t operand_count;
 
 static uint16_t read_operand(uint8_t t){
-    if(t==OP_LARGE){pc+=2;return zm_read16(pc-2);}
-    if(t==OP_SMALL)return zm_read8(pc++);
-    if(t==OP_VAR)return get_var(zm_read8(pc++));
-    return 0;
+    uint16_t value=0;
+    if(t==OP_LARGE){pc+=2;value = zm_read16(pc-2);}
+    if(t==OP_SMALL)value =  zm_read8(pc++);
+    if(t==OP_VAR) value = get_var(zm_read8(pc++));
+    /*cpm_printstring(" type: ");
+    print_hex(t);
+    cpm_printstring(" value: ");
+    print_hex(value);
+    crlf();*/
+    return value;
 }
 
 
@@ -501,9 +522,9 @@ static void decode_operands(uint8_t spec){
     for(int s=6;s>=0;s-=2){
         uint8_t t=(spec>>s)&3;
         if(t==OP_OMIT) break;
+        /*cpm_printstring("Operand ");
+        printi(operand_count);*/
         operands[operand_count++]=read_operand(t);
-        cpm_printstring("Operand ");
-        printi(operand_count);
     }
 }
 
@@ -534,7 +555,7 @@ static void branch(uint8_t cond){
         if(!cond) take_branch = 1;
     }
 
-    cpm_printstring("Branch cond: ");
+    /*cpm_printstring("Branch cond: ");
     print_hex(cond);
     cpm_printstring(" sense: ");
     print_hex(b & 0x80);
@@ -543,10 +564,20 @@ static void branch(uint8_t cond){
     cpm_printstring(" offset: ");
     print_hex(off);
     crlf();
-
+    */
     if(take_branch) {
-        if(off==0) push(0),pc=frames[--fp].return_pc;
-        else if(off==1) push(1),pc=frames[--fp].return_pc;
+        if(off==0) {
+            //push(0);
+            //pc=frames[--fp].return_pc;
+            //sp=frames[--fp].saved_sp;
+            z_ret(0);
+        }
+        else if(off==1) {
+            //push(1);
+            //pc=frames[--fp].return_pc;
+            //sp=frames[--fp].saved_sp;
+            z_ret(1);
+        }
         else pc+=off-2;
     }
 }
@@ -748,9 +779,9 @@ static uint8_t tokenize(char *in, uint16_t parse_buf, uint16_t text_buf)
     uint8_t i=0;
 
     uint8_t max_text = zm_read8(parse_buf);
-    cpm_printstring("Max test: ");
-    print_hex(max_text);
-    crlf();
+    //cpm_printstring("Max test: ");
+    //print_hex(max_text);
+    //crlf();
 
     while(in[i] && count<MAX_TOKENS){
         while(is_sep(in[i])) i++;
@@ -781,7 +812,7 @@ static uint8_t tokenize(char *in, uint16_t parse_buf, uint16_t text_buf)
         zm_write8(entry, dict>>8);
         zm_write8(entry+1, dict & 0xff);
         zm_write8(entry+2, len);
-        zm_write8(entry+3, start+1);
+        zm_write8(entry+3, start+2);//1);
 
         count++;
     }
@@ -813,7 +844,7 @@ static uint8_t obj_test_attr(uint8_t obj, uint8_t attr){
 
 static void obj_set_attr(uint8_t obj, uint8_t attr){
     uint16_t a = obj_addr(obj) + (attr >> 3);
-    zm_write8(a, zm_read8(a) | (0x80 >> (attr & 7)));
+    if(obj != 0) zm_write8(a, zm_read8(a) | (0x80 >> (attr & 7)));
 }
 
 static void obj_clear_attr(uint8_t obj, uint8_t attr){
@@ -834,6 +865,7 @@ static uint8_t obj_child(uint8_t obj){
 }
 
 static void obj_remove(uint8_t obj){
+    if(!obj) return;
     uint8_t parent = obj_parent(obj);
     if (!parent) return;
 
@@ -859,6 +891,7 @@ static void obj_remove(uint8_t obj){
 }
 
 static void obj_insert(uint8_t obj, uint8_t dest){
+    if(obj == 0 || dest == 0) return;
     obj_remove(obj);
 
     uint16_t daddr = obj_addr(dest) + 6;
@@ -944,8 +977,11 @@ static void obj_put_prop(uint8_t obj, uint8_t prop, uint16_t val){
  */
 
 static void z_ret(uint16_t v){
-    CallFrame *f=&frames[--fp];
+    CallFrame *f=&frames[fp-1];
+    fp--;
     pc=f->return_pc;
+    sp=f->saved_sp;
+    /*if(f->store_var != 0)*/ 
     set_var(f->store_var,v);
 }
 
@@ -989,7 +1025,7 @@ static void step(void){
     cpm_printstring("OP: ");
     print_hex(op);
     cpm_printstring(" PC: ");
-    print_hex(pc);
+    print_hex_32(pc);
     crlf();
     /* -------- 2OP -------- */
     if(op<0x80){
@@ -1108,13 +1144,38 @@ static void step(void){
         }
 
         case OP2_GET_NEXT_PROP: {
-            uint16_t p = obj_find_prop(operands[0], operands[1]);
+            cpm_printstring("GET_NEXT_PROP - op1: ");
+            print_hex(operands[0]);
+            cpm_printstring(" op2: ");
+            print_hex(operands[1]);
+            crlf();
+            uint8_t obj = (uint8_t)operands[0];
+            uint8_t prop = (uint8_t)operands[1];
+            uint16_t addr;
+
+            if (prop==0) {
+                addr = obj_prop_start(obj);
+            } else {
+                addr = obj_find_prop(obj, prop);
+                if(!addr) {
+                    store_result(0);
+                    break;
+                }
+                addr+=obj_get_prop_len(addr);
+            }
+
+            uint8_t next_header = zm_read8(addr);
+
+            if(next_header == 0) store_result(0);
+            else store_result(next_header & 0x1F);
+
+            /*uint16_t p = obj_find_prop(operands[0], operands[1]);
             if (!p) {
                 store_result(0);
             } else {
                 uint8_t h = zm_read8(p - 1);
                 store_result(h & 0x1F);
-            }
+            }*/
             break;
         }
         
@@ -1174,29 +1235,32 @@ static void step(void){
             print_zstring(prop_table+1);
             break;
         }
+        case OP1_REMOVE_OBJ: 
+            obj_remove(operands[0]);
+            break;
         case OP1_GET_CHILD: {
-            cpm_printstring("GET_CHILD for object ");
-            print_hex(operands[0]);
+            //cpm_printstring("GET_CHILD for object ");
+            //print_hex(operands[0]);
             uint8_t result;
             if(operands[0]==0) result = 0;
             else result = obj_child(operands[0]);
             store_result(result);
-            cpm_printstring(" CHILD: ");
-            print_hex(result);
-            crlf();
+            //cpm_printstring(" CHILD: ");
+            //print_hex(result);
+            //crlf();
             branch(result!=0);
             break;
         }
         case OP1_GET_SIBLING: {
-            cpm_printstring("GET_SIBLING for object ");
-            print_hex(operands[0]);
+            //cpm_printstring("GET_SIBLING for object ");
+            //print_hex(operands[0]);
  
             uint8_t result;
             if(operands[0]==0) result = 0;
             else result = obj_sibling(operands[0]);
             store_result(result);
-            cpm_printstring(" SIBLING ");
-            print_hex(result);
+            //cpm_printstring(" SIBLING ");
+            //print_hex(result);
             branch(result!=0);
             break;
         }
@@ -1209,18 +1273,42 @@ static void step(void){
             store_result(result);
             break;
         }
+        case OP1_GET_PROP_LEN: {
+            uint8_t result;
+            if(operands[0]==0) result = 0;
+            else result = obj_get_prop_len(operands[0]); 
+            store_result(result);
+            break;
+        }
+        case OP1_LOAD: {
+            uint8_t result;
+            result = get_var(operands[0]);
+            store_result(result);
+        }
+        case OP1_NOT: {
+            uint8_t result;
+            result = ~operands[0];
+            store_result(result);
+        }
         case OP1_RET:
         //case OP1_VALUE:
             z_ret(operands[0]);
             break;
-        case OP1_INC:
-            operands[0]++;
-            set_var(zm_read8(pc-1),operands[0]);
+        case OP1_INC: {
+            //cpm_printstring("OP1_INC - operand: ");
+            //print_hex(operands[0]);
+            //crlf();
+            uint8_t value = get_var(operands[0]);
+            value++;
+            set_var(operands[0], value);
             break;
-        case OP1_DEC:
-            operands[0]--;
-            set_var(zm_read8(pc-1),operands[0]);
+        }
+        case OP1_DEC: {
+            uint8_t value = get_var(operands[0]);
+            value--;
+            set_var(operands[0], value);
             break;
+        }
         //case OP1_RET:
         //    z_ret(operands[0]);
         //    break;
@@ -1241,7 +1329,9 @@ static void step(void){
         }
         default:
             crlf();
-            printi(op); 
+            printi(op);
+            spc();
+            print_hex(pc); 
             fatal(" - Non-implemented opcode!!!");
         }
         return;
@@ -1305,6 +1395,7 @@ static void step(void){
     decode_operands(zm_read8(pc++));
     uint8_t var_opcode = op & 0x1f;
     if((op & 0xE0)==0xE0) var_opcode += 0x20;
+    if((op & 0xD0)==0xD0) var_opcode += 0x40;
     //cpm_printstring("Var opcode: ");
     //print_hex(var_opcode);
     //crlf();
@@ -1340,17 +1431,20 @@ static void step(void){
             set_var(sv, 0);
             return;
         }
-
+        
         CallFrame *f = &frames[fp++];
 
         uint8_t sv = zm_read8(pc++);
         f->store_var = sv;
         f->return_pc = pc;
-
-        uint32_t addr = unpack_routine(operands[0]);
-        //cpm_printstring("CALL to address ");
-        //print_hex(addr);
-        //crlf();
+        f->saved_sp = sp;
+        
+        uint32_t addr = (uint32_t)operands[0]<<1;
+        /*cpm_printstring("CALL to address ");
+        print_hex_32(addr);
+        spc();
+        print_hex(operands[0]);
+        crlf()*/;
         f->num_locals = zm_read8(addr++);
 
         for (uint8_t i = 0; i < f->num_locals; i++) {
@@ -1362,23 +1456,33 @@ static void step(void){
         uint8_t argc = operand_count - 1;
         if (argc > f->num_locals)
             argc = f->num_locals;
-        cpm_printstring("Argc: ");
-        printi(argc);
+        //cpm_printstring("Argc: ");
+        //printi(argc);
         for (uint8_t i = 0; i < argc; i++){
             //f->locals[i] = operands[i + 1];
             f->locals[i] = operands[i + 1]; 
-            cpm_printstring("locals ");
-            printi(i);
-            spc();
-            print_hex(f->locals[i]);
-            crlf();
+            //cpm_printstring("locals ");
+            //printi(i);
+            //spc();
+            //print_hex(f->locals[i]);
+            //crlf();
         }
 
         pc = addr; // + 2 * f->num_locals;
         break;
     }
     case OPV_JE:
-        branch(operands[0] == operands[1]);
+        cpm_printstring("JE VAR - operand count: ");
+        print_hex(operand_count);
+        if(operand_count == 2)
+            branch(operands[0] == operands[1]);
+        else if(operand_count == 3)
+            branch(operands[0] == operands[1] ||
+                   operands[0] == operands[2]);
+        else if(operand_count == 4)
+            branch(operands[0] == operands[1] ||
+                   operands[0] == operands[2] ||
+                   operands[0] == operands[3]);
         break;
     case OPV_JL:
         branch((int16_t)operands[0] < (int16_t)operands[1]);
@@ -1477,6 +1581,15 @@ static void step(void){
         store_result(result);
         break;
         }
+    case OPV_LOADW:
+        store_result(zm_read16(operands[0]+2*operands[1])); 
+        break;
+    case OPV_LOADB:
+        store_result(zm_read8(operands[0]+operands[1])); 
+        break;
+    case OPV_MUL:
+        store_result((int16_t)operands[0]*(int16_t)operands[1]);
+        break;
     default:
         crlf();
         printi(op); 
