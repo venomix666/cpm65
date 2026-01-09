@@ -84,7 +84,7 @@
 #define OPV_PRINT_NUM       0x26
 #define OPV_RANDOM          0x27
 #define OPV_AND             0x09
-#define OPV_OR              0x0A
+#define OPV_OR              0x08
 #define OPV_NOT             0x0B
 #define OPV_LOADW           0x0F
 #define OPV_STORE           0x0D
@@ -309,12 +309,29 @@ static Page *get_page(uint16_t page){
  */
 
 static uint8_t zm_read8(uint32_t a){
-    
+   
+    uint8_t data; 
     if(a<dynamic_size) {
-        return dynamic_mem[a];
+        data = dynamic_mem[a];
+    } else { 
+        Page *p=get_page(a>>9);
+        data = p->data[a&0x1FF];
     }
-    Page *p=get_page(a>>9);
-    return p->data[a&0x1FF];
+/*    if(a>0x4687 && a<0x468f) {
+        cpm_printstring("Read addr: ");
+        print_hex(a);
+        cpm_printstring(" data: ");
+        print_hex(data);
+        crlf();
+    }
+    if(a>0x2550 && a<0x2641) {
+        cpm_printstring("Read from parse buffer ");
+        print_hex(a);
+        spc();
+        print_hex(data);
+        crlf();
+    }*/
+    return data;
 }
 
 static uint16_t zm_read16(uint32_t a){
@@ -359,11 +376,20 @@ static uint16_t get_var(uint8_t v, uint8_t indirect){
     }
     uint16_t a = (hdr[0x0c]<<8) + hdr[0x0d] + 2*(v-16);
     uint16_t ret_data = zm_read16(a);
+#ifdef DEBUG
+    cpm_printstring("Read global variable ");
+    print_hex(v);
+    cpm_printstring(" data: ");
+    print_hex(ret_data);
+    cpm_printstring(" address: ");
+    print_hex(a);
+    crlf();
+#endif 
     return ret_data;
 }
 
 static void set_var(uint8_t v,uint16_t val, uint8_t indirect) {
-   if(v==0) {
+    if(v==0) {
         if(indirect) {
             if(sp > 0) stack[sp - 1] = val;
             else push(val);
@@ -371,16 +397,29 @@ static void set_var(uint8_t v,uint16_t val, uint8_t indirect) {
             push(val);
         }
         
-   }
+    }
     else if(v<16) {
-       frames[fp-1].locals[v-1]=val;
+        frames[fp-1].locals[v-1]=val;
     }
     else{
         uint16_t a = (hdr[0x0c]<<8) + hdr[0x0d] + 2*(v-16);
         zm_write8(a,val>>8);
         zm_write8(a+1,val&0xFF);
+        
+        /*cpm_printstring("Write global variable ");
+        print_hex(v);
+        spc();
+        print_hex(val);
+        spc();
+        print_hex(a);
+        crlf();
+        */
+
     }
+
+
 }
+
 
 /* ============================================================
  * Operand decoding
@@ -600,8 +639,8 @@ uint16_t dict_lookup(const char *word)
     print_hex(w0);
     spc();
     print_hex(w1);
-    crlf();*/
-    
+    crlf();
+    */
     //cpm_printstring("sep: ");
     //printi(sep);
     //cpm_printstring(" entry_len: ");
@@ -617,13 +656,14 @@ uint16_t dict_lookup(const char *word)
     //crlf();
     for (uint16_t i = 0; i < dict_entry_count; i++) {
         //uint16_t e = dict + i * entry_len;
-        e += dict_entry_len;
         if (zm_read16(e) == w0 && zm_read16(e + 2) == w1) {
             //cpm_printstring("Found match at address");
             //print_hex(e);
             return e;
         
         }
+        
+        e += dict_entry_len;
     }
 
     return 0;
@@ -647,54 +687,67 @@ static uint8_t tokenize(char *in, uint16_t parse_buf, uint16_t text_buf)
     uint8_t count=0;
     uint8_t i=0;
 
-    uint8_t max_text = zm_read8(parse_buf);
-    //cpm_printstring("Max test: ");
-    //print_hex(max_text);
-    //crlf();
+    uint8_t max_tok = zm_read8(parse_buf);
 
-    while(in[i] && count<MAX_TOKENS){
+    if (max_tok > MAX_TOKENS) max_tok = MAX_TOKENS; 
+
+    // Clear buffer
+    for(uint8_t i=0; i<max_tok; i++) {
+        uint16_t addr = parse_buf+2+(i<<2);
+        zm_write8(addr,0);
+        zm_write8(addr+1,0);
+        zm_write8(addr+2,0);
+        zm_write8(addr+3,0);
+    }
+
+    while(in[i] && count<max_tok){
         while(is_sep(in[i])) i++;
         if(!in[i]) break;
 
         uint8_t start=i;
         char word[10]={0};
-        uint8_t len=0;
+        uint8_t dict_len=0;
+        uint8_t word_len=0;
 
         while(in[i] && !is_sep(in[i])) {
-            if(len<7)
-                word[len++]=in[i];
+            if(dict_len<7)
+                word[dict_len++]=in[i];
+            word_len++;
             i++;
         }
 
         uint16_t dict = dict_lookup(word);
 
-        uint16_t entry = parse_buf + 2 + count*4;
-        //crlf();
-        //cpm_printstring("Writing entry to parse_buf - ");
-        //print_hex(dict>>8);
-        //spc();
-        //print_hex(dict & 0xff);
-        //spc();
-        //print_hex(len);
-        //spc();
-        //print_hex(start+1); 
+        uint16_t entry = parse_buf + 2 + (count<<2);
         zm_write8(entry, dict>>8);
         zm_write8(entry+1, dict & 0xff);
-        zm_write8(entry+2, len);
+        zm_write8(entry+2, word_len);
         zm_write8(entry+3, start+1);//1);
 
         count++;
     }
 
     zm_write8(parse_buf+1,count);
-
-    uint8_t x;
+    //uint8_t x;
+    //crlf();
+   /* cpm_printstring("Parse buffer: ");
     crlf();
-    //for(x=0; x<(count<<2)+2; x++) {
-    //    print_hex(zm_read8(parse_buf+x));
-    //    crlf();
-    //}
-
+    for(x=0; x<(count<<2)+2; x++) {
+        print_hex(zm_read8(parse_buf+x));
+        crlf();
+    }*/
+   /* 
+    cpm_printstring("Text buffer: ");
+    crlf();
+    x=0;
+    while(1) {
+        uint8_t a = zm_read8(text_buf+x);
+        x++;
+        print_hex(a);
+        crlf();
+        if(!a) break;
+    }
+*/
     return count;
 }
 
@@ -912,7 +965,7 @@ static void step(void){
             int16_t value = (int16_t)get_var(operands[0],1);
             value--;
             set_var(operands[0],(uint16_t)value,1);
-            branch(value>(int16_t)operands[1]);
+            branch(value<(int16_t)operands[1]);
             break;
         }
         case OP2_INC_CHK: {
@@ -935,9 +988,25 @@ static void step(void){
             set_var(operands[0],operands[1], 1); 
             break;
         case OP2_LOADW: 
+            /*cpm_printstring("OP2_LOADW address: ");
+            print_hex(operands[0]+2*operands[1]);
+            cpm_printstring(" data: ");
+            print_hex(zm_read16(operands[0]+2*operands[1]));
+            cpm_printstring("Operands: ");
+            print_hex(operands[0]);
+            spc();
+            print_hex(operands[1]);
+            crlf();*/ 
+
+            
             store_result(zm_read16(operands[0]+2*operands[1]), indirect); 
             break;
-        case OP2_LOADB: 
+        case OP2_LOADB:
+            /*cpm_printstring("OP2_LOADB address: ");
+            print_hex(operands[0]+operands[1]);
+            cpm_printstring(" data: ");
+            print_hex(zm_read8(operands[0]+operands[1]));
+            crlf()*/; 
             store_result(zm_read8(operands[0]+operands[1]), indirect); 
             break;
         case OP2_ADD:   
@@ -1280,18 +1349,29 @@ static void step(void){
     case OPV_SREAD: {
         uint16_t text = operands[0];
         uint16_t parse = operands[1];
-
+        //cpm_printstring("Text addr: ");
+        //print_hex(text);
+        //cpm_printstring(" Parse addr: ");
+        //print_hex(parse);
+        //crlf();
         char line[INPUT_MAX]={0};
         uint8_t len = read_line(line);
 
         uint8_t max = zm_read8(text);
         if(len>max) len=max;
 
-        zm_write8(text+1,len);
+        //zm_write8(text+1,len);
         for(uint8_t i=0;i<len;i++)
-            zm_write8(text+2+i,line[i]);
+            zm_write8(text+1+i,line[i]);
+        
+        zm_write8(text+1+len, 0);
 
         tokenize(line,parse,text);
+        /*cpm_printstring("RAW PARSE: ");
+        for(uint8_t i=0; i<6; i++) {
+            print_hex(zm_read8(parse+i));
+            spc();
+        }*/
         break; }
     case OPV_PUT_PROP:
         obj_put_prop((uint8_t)operands[0],(uint8_t)operands[1],
@@ -1330,6 +1410,13 @@ static void step(void){
     case OPV_MUL:
         store_result((int16_t)operands[0]*(int16_t)operands[1], indirect);
         break;
+    case OPV_INC_CHK:{
+        int16_t value = (int16_t)get_var(operands[0],1);
+        value++;
+        set_var(operands[0],(uint16_t)value,1);
+        branch(value>(int16_t)operands[1]);
+        break;
+    }
     default:
         crlf();
         printi(op); 
