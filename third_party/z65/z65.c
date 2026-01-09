@@ -3,7 +3,6 @@
  */
 
 #include <stdint.h>
-//#include <stddef.h>
 #include <cpm.h>
 #include "lib/printi.h"
 /* ============================================================
@@ -36,30 +35,6 @@
 #define OP2_GET_PROP        0x11
 #define OP2_GET_PROP_ADDR   0x12
 #define OP2_GET_NEXT_PROP   0x13
-
-/* 1OP */
-/*#define OP1_RTRUE           0x00
-#define OP1_RFALSE          0x01
-#define OP1_PRINT           0x02
-#define OP1_JUMP            0x03
-#define OP1_PRINT_ADDR      0x04
-#define OP1_VALUE           0x05
-#define OP1_INC             0x06
-#define OP1_DEC             0x07
-#define OP1_PRINT_PADDR     0x08
-#define OP1_REMOVE_OBJ      0x09
-#define OP1_PRINT_OBJ       0x0A
-#define OP1_RET             0x0B
-#define OP1_JZ              0x0C
-#define OP1_JZ              0x00
-#define OP1_INC             0x05
-#define OP1_DEC             0x06
-#define OP1_PRINT_ADDR      0x07
-#define OP1_PRINT_PADDR     0x0D
-#define OP1_REMOVE_OBJ      0x09
-#define OP1_PRINT_OBJ       0x0A
-#define OP1_JUMP            0x0C
-#define OP1_RET             0x0B*/
 
 /* 1OP opcodes (v1–v3) */
 #define OP1_JZ            0x00
@@ -121,29 +96,6 @@
 
 
 /* ============================================================
- * BDOS
- * ============================================================
- */
-
-//extern uint8_t bdos(uint8_t fn, void *arg);
-
-//#define BDOS_OPEN_R     15
-//bin#define BDOS_READ_SEQ  20
-//#define BDOS_READ_RAND 33
-//#define BDOS_CONOUT    2
-
-/*typedef struct {
-    uint8_t drive;
-    char name[8];
-    char ext[3];
-    uint8_t ex,s1,s2,rc;
-    uint8_t d[16];
-    uint8_t cr;
-    uint8_t r0,r1,r2;
-} FCB;
-*/
-
-/* ============================================================
  * Configuration
  * ============================================================
  */
@@ -159,6 +111,8 @@
 
 #define INPUT_MAX 80
 #define MAX_TOKENS 16
+
+//#define DEBUG
 
 /* ============================================================
  * Structures
@@ -183,8 +137,6 @@ typedef struct {
  * Globals
  * ============================================================
  */
-
-//static FCB story_fcb;
 
 static uint8_t dynamic_mem[DYNAMIC_MEM_MAX];
 static uint16_t dynamic_size;
@@ -241,7 +193,6 @@ static void z_ret(uint16_t v);
  */
 
 static inline void putc(char c){
-    //bdos(BDOS_CONOUT,(void *)(uintptr_t)c);
     cpm_conout(c);
 }
 
@@ -299,6 +250,14 @@ static uint8_t read_line(char *buf){
         if(c=='\r'||c=='\n'){
             crlf();
             buf[len]=0;
+            /*cpm_printstring("Read line: ");
+            crlf();
+            for(uint8_t i=0; i<=len; i++) {
+                print_hex(buf[i]);
+                crlf();
+            }
+            cpm_printstring("---END---");
+            crlf();*/
             return len;
         }
         if(c==8 && len){
@@ -320,24 +279,13 @@ static uint8_t read_line(char *buf){
 
 static void load_page(Page *p,uint16_t page){
     uint16_t record=page<<2;
-    //cpm_printstring("Load page from record ");
-    //printi(record);
-    //crlf();
     cpm_fcb.r = record;
-    //story_fcb.r0=record&0xFF;
-    //story_fcb.r1=record>>8;
-    //story_fcb.r2=0;
-    //cmp_set_dma(dma);
-    //crlf();
     for(uint8_t i=0;i<4;i++){
-        //bdos(BDOS_READ_RAND,&story_fcb);
         cpm_set_dma(&dma);
         cpm_read_random(&cpm_fcb);
         for(uint8_t j=0;j<128;j++) {
             p->data[(i<<7)+j]=dma[j];
         }
-        //crlf();
-        //crlf();
         record++;
         cpm_fcb.r = record;
     }
@@ -346,10 +294,6 @@ static void load_page(Page *p,uint16_t page){
 }
 
 static Page *get_page(uint16_t page){
-    //cpm_printstring("Page ");
-    //printi(page);
-    //cpm_printstring(" requested");
-    //crlf();
     for(uint8_t i=0;i<NUM_PAGES;i++)
         if(page_cache[i].valid&&page_cache[i].page==page)
             return &page_cache[i];
@@ -365,27 +309,11 @@ static Page *get_page(uint16_t page){
  */
 
 static uint8_t zm_read8(uint32_t a){
-    //cpm_printstring("read 8 addr ");
-    //printi(a);
-    //cpm_printstring(" data ");
     
     if(a<dynamic_size) {
-        //cpm_printstring("Read ");
-        //print_hex(dynamic_mem[a]);
-        //cpm_printstring(" from address ");
-        //print_hex(a);
-        //cpm_printstring(" (dynamic)");
-        //crlf();
         return dynamic_mem[a];
     }
     Page *p=get_page(a>>9);
-    //printi(p->data[a&0x1FF]);
-    //crlf();
-    //cpm_printstring("Read ");
-    //print_hex(p->data[a&0x1FF]);
-    //cpm_printstring(" from address ");
-    //print_hex(a);
-    //crlf();
     return p->data[a&0x1FF];
 }
 
@@ -409,86 +337,33 @@ static void zm_write8(uint32_t a,uint8_t v){
  */
 
 static void push(int16_t v){
-    crlf();
-    cpm_printstring("Stack push - ");
-    print_hex(v);
     stack[sp++]=v;
-    cpm_printstring(" SP: ");
-    print_hex(sp);
-    crlf();
-    cpm_printstring("Stack [");
-    for(uint8_t i=0; i<sp; i++) {
-        printi(stack[i]);
-        cpm_printstring(", ");
-    }
-    cpm_printstring("]\r\n");
 }
 static uint16_t pop(void) {
     uint16_t val;
     val = stack[--sp];
-    crlf();
-    cpm_printstring("Stack pop - ");
-    print_hex(val);
-    cpm_printstring(" SP: ");
-    print_hex(sp);
-    crlf(); 
-    cpm_printstring("Stack [");
-    for(uint8_t i=0; i<sp; i++) {
-        printi(stack[i]);
-        cpm_printstring(", ");
-    }
-    cpm_printstring("]\r\n");
-
     return val;
 }
 
 static uint16_t get_var(uint8_t v, uint8_t indirect){
-//    cpm_printstring("get_var - v:");
-//    print_hex(v);
-//    crlf();
     if(v==0) {
         uint16_t val;
         if(indirect)
             val = (sp > 0) ? stack[sp - 1] : 0;
         else
             val = pop();
-        //crlf();
-        //cpm_printstring("stack pop: ");
-        //print_hex(stack);
-        //cpm_printstring(" SP: ");
-        //print_hex(sp);
-        //crlf();
         return val;
     }
     if(v<16) {
-        cpm_printstring("local ");
-        printi(v);
-        cpm_printstring(": ");
-        print_hex(frames[fp-1].locals[v-1]);
-        cpm_printstring(" fp: ");
-        printi(fp-1);
-        crlf();
         return frames[fp-1].locals[v-1];
     }
-        //uint16_t a=zm_read16(0x0C)+2*(v-16);
     uint16_t a = (hdr[0x0c]<<8) + hdr[0x0d] + 2*(v-16);
-    //cpm_printstring("get_var - a:");
-    //print_hex(a);
-    //crlf();
     uint16_t ret_data = zm_read16(a);
-    //cpm_printstring("global: ");
-    //print_hex(ret_data);
-    //crlf();
     return ret_data;
 }
 
 static void set_var(uint8_t v,uint16_t val, uint8_t indirect) {
-//    cpm_printstring("Setvar - var: ");
-//    print_hex(v);
-//    cpm_printstring(" val: ");
-//    print_hex(val);
-//    crlf();
-    if(v==0) {
+   if(v==0) {
         if(indirect) {
             if(sp > 0) stack[sp - 1] = val;
             else push(val);
@@ -496,33 +371,12 @@ static void set_var(uint8_t v,uint16_t val, uint8_t indirect) {
             push(val);
         }
         
-        //push(val);
-        
-        //cpm_printstring("stack push: ");
-        //print_hex(val);
-        //cpm_printstring(" SP: ");
-        //print_hex(sp);
-        //crlf();
-    }
+   }
     else if(v<16) {
-        cpm_printstring("Setvar local ");
-        printi(v);
-        spc();
-        print_hex(val);
-        cpm_printstring(" fp: ");
-        printi(fp-1);
-        crlf();
-        frames[fp-1].locals[v-1]=val;
+       frames[fp-1].locals[v-1]=val;
     }
     else{
-        //uint16_t a=zm_read16(0x0C)+2*(v-16);
         uint16_t a = (hdr[0x0c]<<8) + hdr[0x0d] + 2*(v-16);
-        //cpm_printstring("Setvar ");
-        //printi(a);
-        //spc();
-        //printi(val);
-        //spc();
-        //printi(v);
         zm_write8(a,val>>8);
         zm_write8(a+1,val&0xFF);
     }
@@ -547,12 +401,7 @@ static uint16_t read_operand(uint8_t t, uint8_t indirect){
         if(indirect) value = var_num;
         else value = get_var(var_num, 0); 
     }   
-    cpm_printstring(" type: ");
-    print_hex(t);
-    cpm_printstring(" value: ");
-    print_hex(value);
-    crlf();
-    return value;
+   return value;
 }
 
 
@@ -561,8 +410,6 @@ static void decode_operands(uint8_t spec, uint8_t indirect){
     for(int s=6;s>=0;s-=2){
         uint8_t t=(spec>>s)&3;
         if(t==OP_OMIT) break;
-        /*cpm_printstring("Operand ");
-        printi(operand_count);*/
         operands[operand_count++]=read_operand(t, indirect);
     }
 }
@@ -575,7 +422,6 @@ static void decode_operands(uint8_t spec, uint8_t indirect){
 
 static void branch(uint8_t cond){
     uint8_t b=zm_read8(pc++);
-    //uint8_t sense=b&0x80;
     int16_t off;
 
     if(b&0x40) off=b&0x3F;
@@ -594,27 +440,11 @@ static void branch(uint8_t cond){
         if(!cond) take_branch = 1;
     }
 
-    /*cpm_printstring("Branch cond: ");
-    print_hex(cond);
-    cpm_printstring(" sense: ");
-    print_hex(b & 0x80);
-    cpm_printstring(" take_branch: ");
-    print_hex(take_branch);
-    cpm_printstring(" offset: ");
-    print_hex(off);
-    crlf();
-    */
     if(take_branch) {
         if(off==0) {
-            //push(0);
-            //pc=frames[--fp].return_pc;
-            //sp=frames[--fp].saved_sp;
             z_ret(0);
         }
         else if(off==1) {
-            //push(1);
-            //pc=frames[--fp].return_pc;
-            //sp=frames[--fp].saved_sp;
             z_ret(1);
         }
         else pc+=off-2;
@@ -851,7 +681,7 @@ static uint8_t tokenize(char *in, uint16_t parse_buf, uint16_t text_buf)
         zm_write8(entry, dict>>8);
         zm_write8(entry+1, dict & 0xff);
         zm_write8(entry+2, len);
-        zm_write8(entry+3, start+2);//1);
+        zm_write8(entry+3, start+1);//1);
 
         count++;
     }
@@ -981,18 +811,7 @@ static uint8_t obj_get_prop_len(uint16_t addr){
 }
 
 static void obj_put_prop(uint8_t obj, uint8_t prop, uint16_t val){
-    /*cpm_printstring("obj_put_prop - obj: ");
-    print_hex(obj);
-    cpm_printstring(" prop: ");
-    print_hex(prop);
-    cpm_printstring(" val: ");
-    print_hex(val);
-    */
     uint16_t p = obj_find_prop(obj, prop);
-    
-    //cpm_printstring(" p: ");
-    //print_hex(p);
-    //crlf();
     
     if (!p) {
         // property must exist
@@ -1019,7 +838,6 @@ static void z_ret(uint16_t v){
     CallFrame *f=&frames[--fp];
     pc=f->return_pc;
     sp=f->saved_sp;
-    /*if(f->store_var != 0)*/ 
     if(f->store_var==0) {
         push(v);
     }
@@ -1028,11 +846,6 @@ static void z_ret(uint16_t v){
 
 static void store_result(uint16_t v, uint8_t indirect){
     uint8_t var=zm_read8(pc++);
-    //cpm_printstring("Store ");
-    //printi(v);
-    //cpm_printstring(" in variable ");
-    //printi(var);
-    //crlf();
     set_var(var, v, indirect);
 }
 
@@ -1040,12 +853,6 @@ static void restart(void)
 {
     pc = initial_pc;
     sp = fp = 0;
-}
-
-static inline uint32_t unpack_routine(uint16_t p)
-{
-    // v1-v3 - only version supported for now
-    return p << 1;
 }
 
 static uint16_t rng_next(void)
@@ -1064,11 +871,13 @@ static uint16_t rng_next(void)
 static void step(void){
     uint8_t op=zm_read8(pc++);
     
+#ifdef DEBUG
     cpm_printstring("OP: ");
     print_hex(op);
     cpm_printstring(" PC: ");
     print_hex_32(pc);
     crlf();
+#endif
     
     /* -------- 2OP -------- */
     if(op<0x80){
@@ -1083,20 +892,8 @@ static void step(void){
                               op == 0x44 || op == 0x64); 
         operands[0]=read_operand(t1, indirect & d_indirect);
         operands[1]=read_operand(t2, 0);
-        /*
-        cpm_printstring("2OP - ");
-        print_hex(operands[0]);
-        spc();
-        print_hex(operands[1]);
-        crlf();
-        */
         switch(oc){
         case OP2_JE:
-            //cpm_printstring("JE ");
-            //printi(operands[0]);
-            //spc();
-            //printi(operands[1]);
-            //crlf();  
             branch(operands[0]==operands[1]); 
             break;
         case OP2_JL:  
@@ -1112,12 +909,6 @@ static void step(void){
             break;
             }
         case OP2_DEC_CHK: {
-            //cpm_printstring("DEC_CHK");
-            //crlf();
-            
-            //operands[0]--;
-            //set_var(var_num,operands[0]);
-            //branch((int16_t)operands[0]<(int16_t)operands[1]);
             int16_t value = (int16_t)get_var(operands[0],1);
             value--;
             set_var(operands[0],(uint16_t)value,1);
@@ -1125,23 +916,6 @@ static void step(void){
             break;
         }
         case OP2_INC_CHK: {
-            /*cpm_printstring("OP2_INC_CHK entry - OP1: ");
-            print_hex(operands[0]);
-            cpm_printstring(" OP2: ");
-            print_hex(operands[1]);
-            cpm_printstring(" Var: ");
-            print_hex(var_num);
-            crlf(); */
-            //cpm_printstring("INC_CHK op1: ");
-            //print_hex(operands[0]);
-            //cpm_printstring("Var num: ");
-            //print_hex(var_num);
-            //crlf();
-            //uint8_t v_idx = zm_read8(pc - 2);
-            //int16_t val = (int16_t)get_var(v_idx, indirect) + 1; 
-            ///set_var(v_idx, (uint16_t)val, indirect);
-            //branch(val > (int16_t)operands[1]);
-            //operands[0]++;
             int16_t value = (int16_t)get_var(operands[0],1);
             value++;
             set_var(operands[0],(uint16_t)value,1);
@@ -1158,11 +932,6 @@ static void step(void){
             store_result(operands[0]&operands[1],indirect); 
             break;
         case OP2_STORE:
-            cpm_printstring("OP2_STORE - op1: ");
-            print_hex(operands[0]);
-            cpm_printstring(" op2: ");
-            print_hex(operands[1]);
-            crlf(); 
             set_var(operands[0],operands[1], 1); 
             break;
         case OP2_LOADW: 
@@ -1218,11 +987,6 @@ static void step(void){
         }
 
         case OP2_GET_NEXT_PROP: {
-            //cpm_printstring("GET_NEXT_PROP - op1: ");
-            //print_hex(operands[0]);
-            //cpm_printstring(" op2: ");
-            //print_hex(operands[1]);
-            //crlf();
             uint8_t obj = (uint8_t)operands[0];
             uint8_t prop = (uint8_t)operands[1];
             uint16_t addr;
@@ -1243,13 +1007,6 @@ static void step(void){
             if(next_header == 0) store_result(0, indirect);
             else store_result(next_header & 0x1F, indirect);
 
-            /*uint16_t p = obj_find_prop(operands[0], operands[1]);
-            if (!p) {
-                store_result(0);
-            } else {
-                uint8_t h = zm_read8(p - 1);
-                store_result(h & 0x1F);
-            }*/
             break;
         }
         
@@ -1270,29 +1027,8 @@ static void step(void){
         uint8_t oc=op&0x0F;
         uint8_t indirect = (oc == OP1_LOAD);
         if(type!=OP_OMIT) operands[0]=read_operand(type, indirect);
-        //cpm_printstring("Type: ");
-        //printi(type);
-        //cpm_printstring(" Operand 1: ");
-        //printi(operands[0]);
-        //cpm_printstring(" oc: ");
-        //print_hex(oc);
-        //crlf();
         switch(oc){
-        /*case OP1_RTRUE: 
-            z_ret(1); 
-            break;
-        case OP1_RFALSE:
-            z_ret(0); 
-            break;*/
-        /*case OP1_PRINT:
-            print_zstring(pc);
-            while(!(zm_read16(pc)&0x8000)) pc+=2;
-            pc+=2;
-            break;*/
         case OP1_JUMP:
-            //cpm_printstring("Performing jump with offset");
-            //printi(operands[0]-2);
-            //crlf();
             pc+=(int16_t)operands[0]-2;
             break;
         case OP1_PRINT_ADDR:
@@ -1314,28 +1050,18 @@ static void step(void){
             obj_remove(operands[0]);
             break;
         case OP1_GET_CHILD: {
-            //cpm_printstring("GET_CHILD for object ");
-            //print_hex(operands[0]);
             uint8_t result;
             if(operands[0]==0) result = 0;
             else result = obj_child(operands[0]);
             store_result(result, indirect);
-            //cpm_printstring(" CHILD: ");
-            //print_hex(result);
-            //crlf();
             branch(result!=0);
             break;
         }
         case OP1_GET_SIBLING: {
-            //cpm_printstring("GET_SIBLING for object ");
-            //print_hex(operands[0]);
- 
             uint8_t result;
             if(operands[0]==0) result = 0;
             else result = obj_sibling(operands[0]);
             store_result(result, indirect);
-            //cpm_printstring(" SIBLING ");
-            //print_hex(result);
             branch(result!=0);
             break;
         }
@@ -1366,7 +1092,6 @@ static void step(void){
             store_result(result, indirect);
         }
         case OP1_RET:
-        //case OP1_VALUE:
             z_ret(operands[0]);
             break;
         case OP1_INC: {
@@ -1381,21 +1106,11 @@ static void step(void){
             set_var(operands[0], value, indirect);
             break;
         }
-        //case OP1_RET:
-        //    z_ret(operands[0]);
-        //    break;
         case OP1_JZ:
-            //cpm_printstring("JZ - arg ");
-            //print_hex(operands[0]);
             branch(operands[0]==0);
             break;
         case OP1_PRINT_PADDR: {
             uint32_t addr = (uint32_t)operands[0] << 1;
-            //print_hex_32(addr);
-            //crlf();
-            //cpm_printstring("OP1 PRINT_PADDR - ");
-            //print_hex(addr);
-            //crlf();
             print_zstring(addr);
             break;
         }
@@ -1475,36 +1190,7 @@ static void step(void){
     decode_operands(zm_read8(pc++), indirect);
     if((op & 0xE0)==0xE0) var_opcode += 0x20;
     if((op & 0xD0)==0xD0) var_opcode += 0x40;
-    //if(var_opcode != OPV_PULL)
-    //    decode_operands(zm_read8(pc++));
-    //cpm_printstring("Var opcode: ");
-    //print_hex(var_opcode);
-    //crlf();
     switch(var_opcode) {
-    /*case OPV_CALL:
-        cpm_printstring("Call - ");
-        if(operands[0]==0) {
-            uint8_t sv=zm_read8(pc++);
-            set_var(sv,0);
-            return;
-        } else {
-            CallFrame *f=&frames[fp++];
-            f->return_pc=pc+1;
-            f->store_var=zm_read8(pc++);
-            uint16_t addr=unpack_routine(operands[0]);
-            cpm_printstring("Addr: ");
-            printi(addr);
-            f->num_locals=zm_read8(addr++);
-            cpm_printstring("Num lcls: ");
-            printi(f->num_locals);
-            for(uint8_t i=0;i<f->num_locals;i++)
-                f->locals[i]=zm_read16(addr+2*i);
-            pc=addr+2*f->num_locals;
-            cpm_printstring(" New PC: ");
-            printi(pc);
-            crlf();
-        }
-        break;*/
     case OPV_CALL_EXT:
     case OPV_CALL: {
         if (operands[0] == 0) {
@@ -1521,11 +1207,6 @@ static void step(void){
         f->saved_sp = sp;
         
         uint32_t addr = (uint32_t)operands[0]<<1;
-        cpm_printstring("CALL to address ");
-        print_hex_32(addr);
-        spc();
-        print_hex(operands[0]);
-        crlf();
         f->num_locals = zm_read8(addr++);
 
         for (uint8_t i = 0; i < f->num_locals; i++) {
@@ -1537,24 +1218,14 @@ static void step(void){
         uint8_t argc = operand_count - 1;
         if (argc > f->num_locals)
             argc = f->num_locals;
-        //cpm_printstring("Argc: ");
-        //printi(argc);
         for (uint8_t i = 0; i < argc; i++){
-            //f->locals[i] = operands[i + 1];
             f->locals[i] = operands[i + 1]; 
-            cpm_printstring("locals ");
-            printi(i);
-            spc();
-            print_hex(f->locals[i]);
-            crlf();
         }
 
         pc = addr; // + 2 * f->num_locals;
         break;
     }
     case OPV_JE:
-        //cpm_printstring("JE VAR - operand count: ");
-        //print_hex(operand_count);
         if(operand_count == 2)
             branch(operands[0] == operands[1]);
         else if(operand_count == 3)
@@ -1575,13 +1246,6 @@ static void step(void){
         branch((operands[0] & operands[1]) == operands[1]);
         break;
     case OPV_STOREW:
-        //cpm_printstring("STOREW: ");
-        //printi(operands[0]);
-        //spc();
-        //printi(operands[1]);
-        //spc();
-        //printi(operands[2]);
-        //crlf();
         zm_write8(operands[0]+2*operands[1],operands[2]>>8);
         zm_write8(operands[0]+2*operands[1]+1,operands[2]);
         break;
@@ -1607,26 +1271,8 @@ static void step(void){
         break;
 
     case OPV_PULL: {
-        cpm_printstring("OPV_PULL ");
-        print_hex(operands[0]);
-        crlf();
-
-        //if(operands[0] != 0) set_var(operands[0],pop());
-        //else pop();
-        //pc++;
-        //uint8_t dest_var = zm_read8(pc++);
-        
-        //cpm_printstring(" dest_var: ");
-        //print_hex(dest_var);
-
         uint16_t value = pop();
 
-
-        //cpm_printstring(" value: ");
-        //print_hex(value);
-        //crlf();
-
-        //if(operands[1] != 0) 
         set_var(operands[0], value, 1);
 
         break;
@@ -1648,15 +1294,8 @@ static void step(void){
         tokenize(line,parse,text);
         break; }
     case OPV_PUT_PROP:
-            /*cpm_printstring("Putprop - ");
-            print_hex(operands[0]);
-            spc();
-            print_hex(operands[1]);
-            spc();
-            print_hex(operands[2]);
-            crlf();*/
-            obj_put_prop((uint8_t)operands[0],(uint8_t)operands[1],
-                         operands[2]);
+        obj_put_prop((uint8_t)operands[0],(uint8_t)operands[1],
+                     operands[2]);
         break;
     case OPV_OR:
         store_result(operands[0] | operands[1], indirect);
@@ -1665,10 +1304,6 @@ static void step(void){
         store_result(operands[0] & operands[1], indirect);
         break;
     case OPV_RANDOM: {
-        crlf();
-        cpm_printstring("Random called with argument ");
-        print_hex(operands[0]);
-        crlf();
         int16_t range = (int16_t)operands[0];
         if(range == 0) {
             rng_state = (uint16_t)pc;
@@ -1719,18 +1354,13 @@ int main(int agrv, char **argv){
         fatal("Could not open input file!");
 
     cpm_set_dma(&hdr);
-    //bdos(BDOS_READ_SEQ,&story_fcb);
     cpm_read_sequential(&cpm_fcb);
-    //uint8_t *hdr=dma;
     
     dynamic_size=(hdr[0x0e]<<8)|hdr[0x0f];
-    //cpm_printstring("Dynamic size: ");
     
     for(uint16_t i=0; i<DYNAMIC_MEM_MAX; i++)
         dynamic_mem[i] = 0;
 
-    //printi(dynamic_size);
-    //crlf();
     if(dynamic_size>DYNAMIC_MEM_MAX) while(1);
 
     for(uint16_t i=0; i<128; i++)
@@ -1739,7 +1369,7 @@ int main(int agrv, char **argv){
     for(uint16_t i=128;i<dynamic_size;i++){
         if((i&0x7f)==0) {
             cpm_set_dma(&dma);
-            cpm_read_sequential(&cpm_fcb);//bdos(BDOS_READ_SEQ,&story_fcb);
+            cpm_read_sequential(&cpm_fcb);
         }
         dynamic_mem[i]=dma[i&0x7f];
     }
@@ -1756,8 +1386,5 @@ int main(int agrv, char **argv){
     abbrev_table = 0;
     abbrev_base = (hdr[0x18]<<8)|hdr[0x19];
 
-    //cpm_printstring("PC: ");
-    //print_hex(pc);
-    //crlf();
     for(;;) step();
 }
