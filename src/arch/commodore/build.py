@@ -240,7 +240,7 @@ mkcbmfs(
     title="cp/m-65: c64",
     items={
         "cpm": ".+c64_loader",
-        "yload1541,u": ".+usr_yload1541",
+        "&yload1541,u": ".+usr_yload1541",
         "bios,s": ".+c64_bios",
     },
 )
