@@ -153,8 +153,8 @@
 #define DYNAMIC_MEM_MAX 16384
 
 #define STACK_SIZE 256
-#define MAX_FRAMES 16
-#define MAX_LOCALS 8
+#define MAX_FRAMES 8
+#define MAX_LOCALS 16
 #define MAX_OPERANDS 8
 
 #define INPUT_MAX 80
@@ -409,43 +409,65 @@ static void zm_write8(uint32_t a,uint8_t v){
  */
 
 static void push(int16_t v){
-    /*crlf();
+    crlf();
     cpm_printstring("Stack push - ");
     print_hex(v);
-    crlf();*/
     stack[sp++]=v;
+    cpm_printstring(" SP: ");
+    print_hex(sp);
+    crlf();
+    cpm_printstring("Stack [");
+    for(uint8_t i=0; i<sp; i++) {
+        printi(stack[i]);
+        cpm_printstring(", ");
+    }
+    cpm_printstring("]\r\n");
 }
 static uint16_t pop(void) {
     uint16_t val;
     val = stack[--sp];
-    /*crlf();
+    crlf();
     cpm_printstring("Stack pop - ");
     print_hex(val);
-    crlf();*/ 
+    cpm_printstring(" SP: ");
+    print_hex(sp);
+    crlf(); 
+    cpm_printstring("Stack [");
+    for(uint8_t i=0; i<sp; i++) {
+        printi(stack[i]);
+        cpm_printstring(", ");
+    }
+    cpm_printstring("]\r\n");
+
     return val;
 }
 
-static uint16_t get_var(uint8_t v){
+static uint16_t get_var(uint8_t v, uint8_t indirect){
 //    cpm_printstring("get_var - v:");
 //    print_hex(v);
 //    crlf();
     if(v==0) {
-        uint16_t stack;
-        stack = pop();
+        uint16_t val;
+        if(indirect)
+            val = (sp > 0) ? stack[sp - 1] : 0;
+        else
+            val = pop();
         //crlf();
         //cpm_printstring("stack pop: ");
         //print_hex(stack);
         //cpm_printstring(" SP: ");
         //print_hex(sp);
         //crlf();
-        return stack;
+        return val;
     }
     if(v<16) {
-        //cpm_printstring("local ");
-        //printi(v);
-        //cpm_printstring(": ");
-        //print_hex(frames[fp-1].locals[v-1]);
-        //crlf();
+        cpm_printstring("local ");
+        printi(v);
+        cpm_printstring(": ");
+        print_hex(frames[fp-1].locals[v-1]);
+        cpm_printstring(" fp: ");
+        printi(fp-1);
+        crlf();
         return frames[fp-1].locals[v-1];
     }
         //uint16_t a=zm_read16(0x0C)+2*(v-16);
@@ -460,14 +482,22 @@ static uint16_t get_var(uint8_t v){
     return ret_data;
 }
 
-static void set_var(uint8_t v,uint16_t val){
+static void set_var(uint8_t v,uint16_t val, uint8_t indirect) {
 //    cpm_printstring("Setvar - var: ");
 //    print_hex(v);
 //    cpm_printstring(" val: ");
 //    print_hex(val);
 //    crlf();
     if(v==0) {
-        push(val);
+        if(indirect) {
+            if(sp > 0) stack[sp - 1] = val;
+            else push(val);
+        } else {
+            push(val);
+        }
+        
+        //push(val);
+        
         //cpm_printstring("stack push: ");
         //print_hex(val);
         //cpm_printstring(" SP: ");
@@ -475,11 +505,13 @@ static void set_var(uint8_t v,uint16_t val){
         //crlf();
     }
     else if(v<16) {
-        //cpm_printstring("Setvar local ");
-        //printi(v);
-        //spc();
-        //print_hex(val);
-        //crlf();
+        cpm_printstring("Setvar local ");
+        printi(v);
+        spc();
+        print_hex(val);
+        cpm_printstring(" fp: ");
+        printi(fp-1);
+        crlf();
         frames[fp-1].locals[v-1]=val;
     }
     else{
@@ -506,28 +538,32 @@ enum{OP_LARGE,OP_SMALL,OP_VAR,OP_OMIT};
 static uint16_t operands[MAX_OPERANDS];
 static uint8_t operand_count;
 
-static uint16_t read_operand(uint8_t t){
+static uint16_t read_operand(uint8_t t, uint8_t indirect){
     uint16_t value=0;
     if(t==OP_LARGE){pc+=2;value = zm_read16(pc-2);}
     if(t==OP_SMALL)value =  zm_read8(pc++);
-    if(t==OP_VAR) value = get_var(zm_read8(pc++));
-    /*cpm_printstring(" type: ");
+    if(t==OP_VAR) {
+        uint8_t var_num = zm_read8(pc++);
+        if(indirect) value = var_num;
+        else value = get_var(var_num, 0); 
+    }   
+    cpm_printstring(" type: ");
     print_hex(t);
     cpm_printstring(" value: ");
     print_hex(value);
-    crlf();*/
+    crlf();
     return value;
 }
 
 
-static void decode_operands(uint8_t spec){
+static void decode_operands(uint8_t spec, uint8_t indirect){
     operand_count=0;
     for(int s=6;s>=0;s-=2){
         uint8_t t=(spec>>s)&3;
         if(t==OP_OMIT) break;
         /*cpm_printstring("Operand ");
         printi(operand_count);*/
-        operands[operand_count++]=read_operand(t);
+        operands[operand_count++]=read_operand(t, indirect);
     }
 }
 
@@ -980,22 +1016,24 @@ static void obj_put_prop(uint8_t obj, uint8_t prop, uint16_t val){
  */
 
 static void z_ret(uint16_t v){
-    CallFrame *f=&frames[fp-1];
-    fp--;
+    CallFrame *f=&frames[--fp];
     pc=f->return_pc;
     sp=f->saved_sp;
     /*if(f->store_var != 0)*/ 
-    set_var(f->store_var,v);
+    if(f->store_var==0) {
+        push(v);
+    }
+    else set_var(f->store_var,v, 0);
 }
 
-static void store_result(uint16_t v){
+static void store_result(uint16_t v, uint8_t indirect){
     uint8_t var=zm_read8(pc++);
     //cpm_printstring("Store ");
     //printi(v);
     //cpm_printstring(" in variable ");
     //printi(var);
     //crlf();
-    set_var(var,v);
+    set_var(var, v, indirect);
 }
 
 static void restart(void)
@@ -1025,19 +1063,26 @@ static uint16_t rng_next(void)
 
 static void step(void){
     uint8_t op=zm_read8(pc++);
-    //cpm_printstring("OP: ");
-    //print_hex(op);
-    //cpm_printstring(" PC: ");
-    //print_hex_32(pc);
-    //crlf();
+    
+    cpm_printstring("OP: ");
+    print_hex(op);
+    cpm_printstring(" PC: ");
+    print_hex_32(pc);
+    crlf();
+    
     /* -------- 2OP -------- */
     if(op<0x80){
         uint8_t t1=(op&0x40)?OP_VAR:OP_SMALL;
         uint8_t t2=(op&0x20)?OP_VAR:OP_SMALL;
-        if(op == 0x05 || op ==0x04) t1=OP_VAR;
+        uint8_t oc = op & 0x1f;
+        if(oc == OP2_INC_CHK || oc == OP2_DEC_CHK) t1=OP_VAR;
         uint8_t var_num = zm_read8(pc);
-        operands[0]=read_operand(t1);
-        operands[1]=read_operand(t2);
+        uint8_t indirect = ((oc == OP2_INC_CHK && t1 == OP_VAR)|| 
+                            (oc == OP2_DEC_CHK && t1 == OP_VAR));
+        uint8_t d_indirect = !(op == 0x45 || op == 0x65 ||
+                              op == 0x44 || op == 0x64); 
+        operands[0]=read_operand(t1, indirect & d_indirect);
+        operands[1]=read_operand(t2, 0);
         /*
         cpm_printstring("2OP - ");
         print_hex(operands[0]);
@@ -1045,7 +1090,7 @@ static void step(void){
         print_hex(operands[1]);
         crlf();
         */
-        switch(op&0x1F){
+        switch(oc){
         case OP2_JE:
             //cpm_printstring("JE ");
             //printi(operands[0]);
@@ -1066,62 +1111,85 @@ static void step(void){
             branch(parent == operands[1]); 
             break;
             }
-        case OP2_DEC_CHK:
+        case OP2_DEC_CHK: {
             //cpm_printstring("DEC_CHK");
             //crlf();
-            operands[0]--;
-            set_var(var_num,operands[0]);
-            branch((int16_t)operands[0]<(int16_t)operands[1]);
+            
+            //operands[0]--;
+            //set_var(var_num,operands[0]);
+            //branch((int16_t)operands[0]<(int16_t)operands[1]);
+            int16_t value = (int16_t)get_var(operands[0],1);
+            value--;
+            set_var(operands[0],(uint16_t)value,1);
+            branch(value>(int16_t)operands[1]);
             break;
-        case OP2_INC_CHK:
-            //cpm_printstring("OP2_INC_CHK entry - OP1: ");
-            //print_hex(operands[0]);
-            //cpm_printstring(" OP2: ");
-            //print_hex(operands[1]);
-            //cpm_printstring(" Var: ");
-            //print_hex(var_num);
-            //crlf(); 
+        }
+        case OP2_INC_CHK: {
+            /*cpm_printstring("OP2_INC_CHK entry - OP1: ");
+            print_hex(operands[0]);
+            cpm_printstring(" OP2: ");
+            print_hex(operands[1]);
+            cpm_printstring(" Var: ");
+            print_hex(var_num);
+            crlf(); */
             //cpm_printstring("INC_CHK op1: ");
             //print_hex(operands[0]);
             //cpm_printstring("Var num: ");
             //print_hex(var_num);
             //crlf();
-            operands[0]++;
-            set_var(var_num,operands[0]);
-            branch((int16_t)operands[0]>(int16_t)operands[1]);
+            //uint8_t v_idx = zm_read8(pc - 2);
+            //int16_t val = (int16_t)get_var(v_idx, indirect) + 1; 
+            ///set_var(v_idx, (uint16_t)val, indirect);
+            //branch(val > (int16_t)operands[1]);
+            //operands[0]++;
+            int16_t value = (int16_t)get_var(operands[0],1);
+            value++;
+            set_var(operands[0],(uint16_t)value,1);
+            branch(value>(int16_t)operands[1]);
             break;
+        }
         case OP2_TEST:
             branch((operands[0]&operands[1])==operands[1]);
             break;
         case OP2_OR:    
-            store_result(operands[0]|operands[1]); 
+            store_result(operands[0]|operands[1],indirect); 
             break;
         case OP2_AND:   
-            store_result(operands[0]&operands[1]); 
+            store_result(operands[0]&operands[1],indirect); 
             break;
-        case OP2_STORE: 
-            set_var(operands[0],operands[1]); 
+        case OP2_STORE:
+            cpm_printstring("OP2_STORE - op1: ");
+            print_hex(operands[0]);
+            cpm_printstring(" op2: ");
+            print_hex(operands[1]);
+            crlf(); 
+            set_var(operands[0],operands[1], 1); 
             break;
         case OP2_LOADW: 
-            store_result(zm_read16(operands[0]+2*operands[1])); 
+            store_result(zm_read16(operands[0]+2*operands[1]), indirect); 
             break;
         case OP2_LOADB: 
-            store_result(zm_read8(operands[0]+operands[1])); 
+            store_result(zm_read8(operands[0]+operands[1]), indirect); 
             break;
         case OP2_ADD:   
-            store_result((int16_t)operands[0]+(int16_t)operands[1]); 
+            store_result((int16_t)operands[0]+(int16_t)operands[1], 
+                         indirect); 
             break;
         case OP2_SUB:   
-            store_result((int16_t)operands[0]-(int16_t)operands[1]); 
+            store_result((int16_t)operands[0]-(int16_t)operands[1], 
+                         indirect); 
             break;
         case OP2_MUL:   
-            store_result((int16_t)operands[0]*(int16_t)operands[1]); 
+            store_result((int16_t)operands[0]*(int16_t)operands[1],
+                         indirect); 
             break;
         case OP2_DIV:   
-            store_result((int16_t)operands[0]/(int16_t)operands[1]); 
+            store_result((int16_t)operands[0]/(int16_t)operands[1],
+                         indirect); 
             break;
         case OP2_MOD:   
-            store_result((int16_t)operands[0]%(int16_t)operands[1]); 
+            store_result((int16_t)operands[0]%(int16_t)operands[1],
+                         indirect); 
             break;
         case OP2_TEST_ATTR:
             branch(obj_test_attr(operands[0], operands[1]));
@@ -1140,12 +1208,12 @@ static void step(void){
             break;
 
         case OP2_GET_PROP:
-            store_result(obj_get_prop(operands[0], operands[1]));
+            store_result(obj_get_prop(operands[0], operands[1]), indirect);
             break;
 
         case OP2_GET_PROP_ADDR: {
             uint16_t p = obj_find_prop(operands[0], operands[1]);
-            store_result(p);
+            store_result(p, indirect);
             break;
         }
 
@@ -1164,7 +1232,7 @@ static void step(void){
             } else {
                 addr = obj_find_prop(obj, prop);
                 if(!addr) {
-                    store_result(0);
+                    store_result(0, indirect);
                     break;
                 }
                 addr+=obj_get_prop_len(addr);
@@ -1172,8 +1240,8 @@ static void step(void){
 
             uint8_t next_header = zm_read8(addr);
 
-            if(next_header == 0) store_result(0);
-            else store_result(next_header & 0x1F);
+            if(next_header == 0) store_result(0, indirect);
+            else store_result(next_header & 0x1F, indirect);
 
             /*uint16_t p = obj_find_prop(operands[0], operands[1]);
             if (!p) {
@@ -1200,7 +1268,8 @@ static void step(void){
     if(op<0xB0){
         uint8_t type=(op>>4)&3;
         uint8_t oc=op&0x0F;
-        if(type!=OP_OMIT) operands[0]=read_operand(type);
+        uint8_t indirect = (oc == OP1_LOAD);
+        if(type!=OP_OMIT) operands[0]=read_operand(type, indirect);
         //cpm_printstring("Type: ");
         //printi(type);
         //cpm_printstring(" Operand 1: ");
@@ -1250,7 +1319,7 @@ static void step(void){
             uint8_t result;
             if(operands[0]==0) result = 0;
             else result = obj_child(operands[0]);
-            store_result(result);
+            store_result(result, indirect);
             //cpm_printstring(" CHILD: ");
             //print_hex(result);
             //crlf();
@@ -1264,7 +1333,7 @@ static void step(void){
             uint8_t result;
             if(operands[0]==0) result = 0;
             else result = obj_sibling(operands[0]);
-            store_result(result);
+            store_result(result, indirect);
             //cpm_printstring(" SIBLING ");
             //print_hex(result);
             branch(result!=0);
@@ -1276,43 +1345,40 @@ static void step(void){
             uint8_t result;
             if(operands[0]==0) result = 0;
             else result = obj_parent(operands[0]);
-            store_result(result);
+            store_result(result, indirect);
             break;
         }
         case OP1_GET_PROP_LEN: {
             uint8_t result;
             if(operands[0]==0) result = 0;
             else result = obj_get_prop_len(operands[0]); 
-            store_result(result);
+            store_result(result, indirect);
             break;
         }
         case OP1_LOAD: {
             uint8_t result;
-            result = get_var(operands[0]);
-            store_result(result);
+            result = get_var(operands[0], indirect);
+            store_result(result, 0);
         }
         case OP1_NOT: {
             uint8_t result;
             result = ~operands[0];
-            store_result(result);
+            store_result(result, indirect);
         }
         case OP1_RET:
         //case OP1_VALUE:
             z_ret(operands[0]);
             break;
         case OP1_INC: {
-            //cpm_printstring("OP1_INC - operand: ");
-            //print_hex(operands[0]);
-            //crlf();
-            uint8_t value = get_var(operands[0]);
+            uint8_t value = get_var(operands[0], indirect);
             value++;
-            set_var(operands[0], value);
+            set_var(operands[0], value, indirect);
             break;
         }
         case OP1_DEC: {
-            uint8_t value = get_var(operands[0]);
+            uint8_t value = get_var(operands[0], indirect);
             value--;
-            set_var(operands[0], value);
+            set_var(operands[0], value, indirect);
             break;
         }
         //case OP1_RET:
@@ -1320,7 +1386,7 @@ static void step(void){
         //    break;
         case OP1_JZ:
             //cpm_printstring("JZ - arg ");
-            print_hex(operands[0]);
+            //print_hex(operands[0]);
             branch(operands[0]==0);
             break;
         case OP1_PRINT_PADDR: {
@@ -1392,8 +1458,8 @@ static void step(void){
             cpm_warmboot();
             break;
         case OP0_VERIFY:
-            // Not supported
-            pc++;
+            // Not supported, just assume it's OK
+            branch(1);
             break;
         default:
             crlf();
@@ -1403,10 +1469,14 @@ static void step(void){
         return;
     }
     /* -------- VAR -------- */
-    decode_operands(zm_read8(pc++));
     uint8_t var_opcode = op & 0x1f;
+    uint8_t indirect = (var_opcode == OPV_PULL);
+    
+    decode_operands(zm_read8(pc++), indirect);
     if((op & 0xE0)==0xE0) var_opcode += 0x20;
     if((op & 0xD0)==0xD0) var_opcode += 0x40;
+    //if(var_opcode != OPV_PULL)
+    //    decode_operands(zm_read8(pc++));
     //cpm_printstring("Var opcode: ");
     //print_hex(var_opcode);
     //crlf();
@@ -1439,7 +1509,7 @@ static void step(void){
     case OPV_CALL: {
         if (operands[0] == 0) {
             uint8_t sv = zm_read8(pc++);
-            set_var(sv, 0);
+            set_var(sv, 0, indirect);
             return;
         }
         
@@ -1451,11 +1521,11 @@ static void step(void){
         f->saved_sp = sp;
         
         uint32_t addr = (uint32_t)operands[0]<<1;
-        /*cpm_printstring("CALL to address ");
+        cpm_printstring("CALL to address ");
         print_hex_32(addr);
         spc();
         print_hex(operands[0]);
-        crlf()*/;
+        crlf();
         f->num_locals = zm_read8(addr++);
 
         for (uint8_t i = 0; i < f->num_locals; i++) {
@@ -1472,19 +1542,19 @@ static void step(void){
         for (uint8_t i = 0; i < argc; i++){
             //f->locals[i] = operands[i + 1];
             f->locals[i] = operands[i + 1]; 
-            //cpm_printstring("locals ");
-            //printi(i);
-            //spc();
-            //print_hex(f->locals[i]);
-            //crlf();
+            cpm_printstring("locals ");
+            printi(i);
+            spc();
+            print_hex(f->locals[i]);
+            crlf();
         }
 
         pc = addr; // + 2 * f->num_locals;
         break;
     }
     case OPV_JE:
-        cpm_printstring("JE VAR - operand count: ");
-        print_hex(operand_count);
+        //cpm_printstring("JE VAR - operand count: ");
+        //print_hex(operand_count);
         if(operand_count == 2)
             branch(operands[0] == operands[1]);
         else if(operand_count == 3)
@@ -1521,7 +1591,7 @@ static void step(void){
         break;
 
     case OPV_STORE:
-        set_var(operands[0],operands[1]); 
+        set_var(operands[0],operands[1], 0); 
         break;
 
     case OPV_PRINT_CHAR:
@@ -1536,9 +1606,31 @@ static void step(void){
         push(operands[0]);
         break;
 
-    case OPV_PULL:
-        set_var(operands[0],pop());
+    case OPV_PULL: {
+        cpm_printstring("OPV_PULL ");
+        print_hex(operands[0]);
+        crlf();
+
+        //if(operands[0] != 0) set_var(operands[0],pop());
+        //else pop();
+        //pc++;
+        //uint8_t dest_var = zm_read8(pc++);
+        
+        //cpm_printstring(" dest_var: ");
+        //print_hex(dest_var);
+
+        uint16_t value = pop();
+
+
+        //cpm_printstring(" value: ");
+        //print_hex(value);
+        //crlf();
+
+        //if(operands[1] != 0) 
+        set_var(operands[0], value, 1);
+
         break;
+    }
     case OPV_SREAD: {
         uint16_t text = operands[0];
         uint16_t parse = operands[1];
@@ -1567,10 +1659,10 @@ static void step(void){
                          operands[2]);
         break;
     case OPV_OR:
-        store_result(operands[0] | operands[1]);
+        store_result(operands[0] | operands[1], indirect);
         break;
     case OPV_AND:
-        store_result(operands[0] & operands[1]);
+        store_result(operands[0] & operands[1], indirect);
         break;
     case OPV_RANDOM: {
         crlf();
@@ -1580,28 +1672,28 @@ static void step(void){
         int16_t range = (int16_t)operands[0];
         if(range == 0) {
             rng_state = (uint16_t)pc;
-            store_result(0);
+            store_result(0, indirect);
             break;
         }
         if(range < 0) {
             rng_state = (uint16_t)(-range);
-            store_result(0);
+            store_result(0, indirect);
             break;
         }
 
         uint16_t r = rng_next();
         uint16_t result = (r % range) + 1;
-        store_result(result);
+        store_result(result, indirect);
         break;
         }
     case OPV_LOADW:
-        store_result(zm_read16(operands[0]+2*operands[1])); 
+        store_result(zm_read16(operands[0]+2*operands[1]), indirect); 
         break;
     case OPV_LOADB:
-        store_result(zm_read8(operands[0]+operands[1])); 
+        store_result(zm_read8(operands[0]+operands[1]), indirect); 
         break;
     case OPV_MUL:
-        store_result((int16_t)operands[0]*(int16_t)operands[1]);
+        store_result((int16_t)operands[0]*(int16_t)operands[1], indirect);
         break;
     default:
         crlf();
