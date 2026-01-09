@@ -73,6 +73,7 @@ FORTH_APPS = {
 
 ZM_APPS = {
     "0:z65.com": "third_party/z65",
+    "0:zork1.z3": "third_party/z65/zork1.z3",
 }
 
 SERIAL_APPS = {

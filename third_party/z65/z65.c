@@ -101,8 +101,8 @@
  */
 
 #define PAGE_SIZE 512
-#define NUM_PAGES 8
-#define DYNAMIC_MEM_MAX 16384
+#define NUM_PAGES 4
+#define DYNAMIC_MEM_MAX 12000
 
 #define STACK_SIZE 256
 #define MAX_FRAMES 8
@@ -138,6 +138,7 @@ typedef struct {
  * ============================================================
  */
 
+
 static uint8_t dynamic_mem[DYNAMIC_MEM_MAX];
 static uint16_t dynamic_size;
 
@@ -152,6 +153,7 @@ static uint16_t sp;
 static CallFrame frames[MAX_FRAMES];
 static uint8_t fp;
 
+static FCB storyFile;
 static uint8_t dma[128];
 static uint8_t hdr[128];
 
@@ -262,12 +264,12 @@ static uint8_t read_line(char *buf){
         }
         if(c==8 && len){
             len--;
-            putc(8); putc(' '); putc(8);
+            //putc(8); putc(' '); putc(8);
             continue;
         }
         if(len<INPUT_MAX-1){
             buf[len++]=c;
-            putc(c);
+            //putc(c);
         }
     }
 }
@@ -279,15 +281,15 @@ static uint8_t read_line(char *buf){
 
 static void load_page(Page *p,uint16_t page){
     uint16_t record=page<<2;
-    cpm_fcb.r = record;
+    storyFile.r = record;
     for(uint8_t i=0;i<4;i++){
         cpm_set_dma(&dma);
-        cpm_read_random(&cpm_fcb);
+        cpm_read_random(&storyFile);
         for(uint8_t j=0;j<128;j++) {
             p->data[(i<<7)+j]=dma[j];
         }
         record++;
-        cpm_fcb.r = record;
+        storyFile.r = record;
     }
     p->page=page;
     p->valid=1;
@@ -1437,14 +1439,26 @@ int main(int agrv, char **argv){
     crlf();
    
     // Get story filename from commandline
-    if(cpm_open_file(&cpm_fcb))
+    for(uint8_t i=0; i<11; i++)
+        storyFile.f[i]=cpm_fcb.f[i];
+    storyFile.dr = cpm_fcb.dr;
+
+    if(cpm_open_file(&storyFile))
         fatal("Could not open input file!");
 
+    //cpm_fcb.r = 0;
     cpm_set_dma(&hdr);
-    cpm_read_sequential(&cpm_fcb);
+    cpm_read_sequential(&storyFile);
     
     dynamic_size=(hdr[0x0e]<<8)|hdr[0x0f];
-    
+    //cpm_printstring("Dynamic size: ");
+    //printi(dynamic_size);
+    //crlf();
+   // cpm_printstring("Header: ");
+   // for(uint8_t i=0; i<16; i++) {
+   //     print_hex(hdr[i]);
+   //     spc();
+   // } 
     for(uint16_t i=0; i<DYNAMIC_MEM_MAX; i++)
         dynamic_mem[i] = 0;
 
@@ -1456,7 +1470,7 @@ int main(int agrv, char **argv){
     for(uint16_t i=128;i<dynamic_size;i++){
         if((i&0x7f)==0) {
             cpm_set_dma(&dma);
-            cpm_read_sequential(&cpm_fcb);
+            cpm_read_sequential(&storyFile);
         }
         dynamic_mem[i]=dma[i&0x7f];
     }
