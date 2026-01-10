@@ -1,6 +1,4 @@
-/* Z-machine v1–v3 interpreter for CP/M-65
- * Step 2: complete 1OP instruction set
- */
+/* Z-machine v1–v3 interpreter for CP/M-65 */
 
 #include <stdint.h>
 #include <cpm.h>
@@ -94,6 +92,18 @@
 #define OPV_LOADB           0x50
 #define OPV_MUL             0x56            
 
+/* ============================================================
+ * Header definitions
+ * ============================================================
+ */
+
+#define HDR_VERSION         0x00
+#define HDR_PC              0x06
+#define HDR_DICT            0x08
+#define HDR_OBJ             0x0A
+#define HDR_GLB             0x0C
+#define HDR_STAT            0x0E
+#define HDR_ABBR            0x18
 
 /* ============================================================
  * Configuration
@@ -376,7 +386,7 @@ static uint16_t get_var(uint8_t v, uint8_t indirect){
     if(v<16) {
         return frames[fp-1].locals[v-1];
     }
-    uint16_t a = (hdr[0x0c]<<8) + hdr[0x0d] + 2*(v-16);
+    uint16_t a = (hdr[HDR_GLB]<<8) + hdr[HDR_GLB+1] + 2*(v-16);
     uint16_t ret_data = zm_read16(a);
 #ifdef DEBUG
     cpm_printstring("Read global variable ");
@@ -404,7 +414,7 @@ static void set_var(uint8_t v,uint16_t val, uint8_t indirect) {
         frames[fp-1].locals[v-1]=val;
     }
     else{
-        uint16_t a = (hdr[0x0c]<<8) + hdr[0x0d] + 2*(v-16);
+        uint16_t a = (hdr[HDR_GLB]<<8) + hdr[HDR_GLB+1] + 2*(v-16);
         zm_write8(a,val>>8);
         zm_write8(a+1,val&0xFF);
         
@@ -564,7 +574,7 @@ static void print_num(int16_t v){
 
 // Dictionary
 static void dict_init(void){
-    dict_addr = hdr[0x08]<<8 | hdr[0x09];
+    dict_addr = hdr[HDR_DICT]<<8 | hdr[HDR_DICT+1];
 //    cpm_printstring("Dict addr ");
 //    print_hex(dict_addr);
     dict_sep_count = zm_read8(dict_addr++);
@@ -1450,7 +1460,7 @@ int main(int agrv, char **argv){
     cpm_set_dma(&hdr);
     cpm_read_sequential(&storyFile);
     
-    dynamic_size=(hdr[0x0e]<<8)|hdr[0x0f];
+    dynamic_size=(hdr[HDR_STAT]<<8)|hdr[HDR_STAT+1];
     //cpm_printstring("Dynamic size: ");
     //printi(dynamic_size);
     //crlf();
@@ -1475,17 +1485,17 @@ int main(int agrv, char **argv){
         dynamic_mem[i]=dma[i&0x7f];
     }
 
-    pc=initial_pc=(hdr[0x06]<<8)|hdr[0x07];
+    pc=initial_pc=(hdr[HDR_PC]<<8)|hdr[HDR_PC+1];
     sp=fp=next_victim=0;
     for(uint8_t i=0;i<NUM_PAGES;i++) page_cache[i].valid=0;
     
     dict_init();
-    object_table = (hdr[0x0a]<<8)|hdr[0x0b];
+    object_table = (hdr[HDR_OBJ]<<8)|hdr[HDR_OBJ+1];
 
     alphabet = 0;
     abbrev_print = 0;
     abbrev_table = 0;
-    abbrev_base = (hdr[0x18]<<8)|hdr[0x19];
+    abbrev_base = (hdr[HDR_ABBR]<<8)|hdr[HDR_ABBR+1];
 
     for(;;) step();
 }
