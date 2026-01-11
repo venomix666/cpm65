@@ -197,7 +197,10 @@ static uint16_t rng_state = 1;
 static uint8_t rng_enabled = 1;
 
 static void z_ret(uint16_t v);
- 
+
+#ifdef DEBUG
+static long int opcnt = 0;
+#endif
 
 /* ============================================================
  * Console
@@ -423,7 +426,7 @@ static void set_var(uint8_t v,uint16_t val, uint8_t indirect) {
         printi(v-1);
         cpm_printstring(" set to ");
         print_hex(val);
-        cpm_printstring(" sp: ");
+        cpm_printstring(" fp: ");
         printi(fp);
         crlf();*/
     }
@@ -432,14 +435,14 @@ static void set_var(uint8_t v,uint16_t val, uint8_t indirect) {
         zm_write8(a,val>>8);
         zm_write8(a+1,val&0xFF);
         
-        /*cpm_printstring("Write global variable ");
-        print_hex(v);
-        spc();
-        print_hex(val);
-        spc();
-        print_hex(a);
-        crlf();
-        */
+        //cpm_printstring("Write global variable ");
+        //print_hex(v);
+        //spc();
+        //print_hex(val);
+        //spc();
+        //print_hex(a);
+        //crlf();
+        
 
     }
 
@@ -952,10 +955,18 @@ static void step(void){
     uint8_t op=zm_read8(pc++);
     
 #ifdef DEBUG
+    printi(opcnt++);
+    spc();
     cpm_printstring("OP: ");
     print_hex(op);
     cpm_printstring(" PC: ");
     print_hex_32(pc);
+    cpm_printstring(" SP: ");
+    print_hex(sp);
+    cpm_printstring(" FP: ");
+    print_hex(fp);
+    cpm_printstring(" [SP]: ");
+    print_hex(stack[sp-1]);
     crlf();
 #endif
     
@@ -979,7 +990,12 @@ static void step(void){
         case OP2_JL:  
             branch((int16_t)operands[0]<(int16_t)operands[1]); 
             break;
-        case OP2_JG:  
+        case OP2_JG: 
+            //cpm_printstring("OP2_JG - op1: ");
+            //print_hex(operands[0]);
+            //cpm_printstring(" op2: ");
+            //print_hex(operands[1]);
+            //crlf();  
             branch((int16_t)operands[0]>(int16_t)operands[1]); 
             break;
         case OP2_JIN: {
@@ -1048,7 +1064,12 @@ static void step(void){
             store_result((int16_t)operands[0]*(int16_t)operands[1],
                          indirect); 
             break;
-        case OP2_DIV:   
+        case OP2_DIV:
+            //cpm_printstring("OP2_DIV - op1: ");
+            //print_hex(operands[0]);
+            //cpm_printstring(" op2: ");
+            //print_hex(operands[1]);
+            //crlf(); 
             store_result((int16_t)operands[0]/(int16_t)operands[1],
                          indirect); 
             break;
@@ -1178,13 +1199,13 @@ static void step(void){
             break;
         }
         case OP1_LOAD: {
-            uint8_t result;
+            uint16_t result;
             result = get_var(operands[0], indirect);
             store_result(result, 0);
             break;
         }
         case OP1_NOT: {
-            uint8_t result;
+            uint16_t result;
             result = ~operands[0];
             store_result(result, indirect);
             break;
@@ -1193,13 +1214,13 @@ static void step(void){
             z_ret(operands[0]);
             break;
         case OP1_INC: {
-            uint8_t value = get_var(operands[0], indirect);
+            uint16_t value = get_var(operands[0], indirect);
             value++;
             set_var(operands[0], value, indirect);
             break;
         }
         case OP1_DEC: {
-            uint8_t value = get_var(operands[0], indirect);
+            uint16_t value = get_var(operands[0], indirect);
             value--;
             set_var(operands[0], value, indirect);
             break;
