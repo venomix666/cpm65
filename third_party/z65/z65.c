@@ -111,11 +111,11 @@
  */
 
 #define PAGE_SIZE 512
-#define NUM_PAGES 4
+#define NUM_PAGES 2
 #define DYNAMIC_MEM_MAX 12000
 
-#define STACK_SIZE 256
-#define MAX_FRAMES 8
+#define STACK_SIZE 512
+#define MAX_FRAMES 12
 #define MAX_LOCALS 16
 #define MAX_OPERANDS 8
 
@@ -384,6 +384,13 @@ static uint16_t get_var(uint8_t v, uint8_t indirect){
         return val;
     }
     if(v<16) {
+/*        cpm_printstring("Local ");
+        printi(v-1);
+        cpm_printstring(" read as ");
+        print_hex(frames[fp-1].locals[v-1]);
+        cpm_printstring(" fp: ");
+        printi(fp);
+        crlf();*/
         return frames[fp-1].locals[v-1];
     }
     uint16_t a = (hdr[HDR_GLB]<<8) + hdr[HDR_GLB+1] + 2*(v-16);
@@ -412,6 +419,13 @@ static void set_var(uint8_t v,uint16_t val, uint8_t indirect) {
     }
     else if(v<16) {
         frames[fp-1].locals[v-1]=val;
+        /*cpm_printstring("Local ");
+        printi(v-1);
+        cpm_printstring(" set to ");
+        print_hex(val);
+        cpm_printstring(" sp: ");
+        printi(fp);
+        crlf();*/
     }
     else{
         uint16_t a = (hdr[HDR_GLB]<<8) + hdr[HDR_GLB+1] + 2*(v-16);
@@ -646,13 +660,13 @@ uint16_t dict_lookup(const char *word)
 
     uint16_t w0 = (zchars[0] << 10) | (zchars[1] << 5) | zchars[2];
     uint16_t w1 = (zchars[3] << 10) | (zchars[4] << 5) | zchars[5] | 0x8000;
-    /*cpm_printstring("dict lookup ");
-    cpm_printstring(word);
-    print_hex(w0);
-    spc();
-    print_hex(w1);
-    crlf();
-    */
+    //cpm_printstring("dict lookup ");
+    //cpm_printstring(word);
+    //print_hex(w0);
+    //spc();
+    //print_hex(w1);
+    //crlf();
+    
     //cpm_printstring("sep: ");
     //printi(sep);
     //cpm_printstring(" entry_len: ");
@@ -671,6 +685,7 @@ uint16_t dict_lookup(const char *word)
         if (zm_read16(e) == w0 && zm_read16(e + 2) == w1) {
             //cpm_printstring("Found match at address");
             //print_hex(e);
+            //crlf();
             return e;
         
         }
@@ -983,8 +998,8 @@ static void step(void){
         case OP2_INC_CHK: {
             int16_t value = (int16_t)get_var(operands[0],1);
             value++;
-            set_var(operands[0],(uint16_t)value,1);
-            branch(value>(int16_t)operands[1]);
+            set_var(operands[0],value,1);
+            branch((int16_t)value>(int16_t)operands[1]);
             break;
         }
         case OP2_TEST:
@@ -1010,7 +1025,7 @@ static void step(void){
             print_hex(operands[1]);
             crlf();*/ 
 
-            
+             
             store_result(zm_read16(operands[0]+2*operands[1]), indirect); 
             break;
         case OP2_LOADB:
@@ -1166,11 +1181,13 @@ static void step(void){
             uint8_t result;
             result = get_var(operands[0], indirect);
             store_result(result, 0);
+            break;
         }
         case OP1_NOT: {
             uint8_t result;
             result = ~operands[0];
             store_result(result, indirect);
+            break;
         }
         case OP1_RET:
             z_ret(operands[0]);
@@ -1456,19 +1473,14 @@ int main(int agrv, char **argv){
     if(cpm_open_file(&storyFile))
         fatal("Could not open input file!");
 
-    //cpm_fcb.r = 0;
     cpm_set_dma(&hdr);
     cpm_read_sequential(&storyFile);
     
+    if(hdr[HDR_VERSION] != 3)
+        fatal("Only v3 files are supported!");
+
     dynamic_size=(hdr[HDR_STAT]<<8)|hdr[HDR_STAT+1];
-    //cpm_printstring("Dynamic size: ");
-    //printi(dynamic_size);
-    //crlf();
-   // cpm_printstring("Header: ");
-   // for(uint8_t i=0; i<16; i++) {
-   //     print_hex(hdr[i]);
-   //     spc();
-   // } 
+    
     for(uint16_t i=0; i<DYNAMIC_MEM_MAX; i++)
         dynamic_mem[i] = 0;
 
