@@ -72,6 +72,7 @@
 #define OPV_JE              0x01
 #define OPV_JL              0x02
 #define OPV_JG              0x03
+#define OPV_DEC_CHK         0x04
 #define OPV_INC_CHK         0x05
 #define OPV_TEST            0x07
 #define OPV_STOREW          0x21
@@ -115,7 +116,7 @@
 #define DYNAMIC_MEM_MAX 12000
 
 #define STACK_SIZE 512
-#define MAX_FRAMES 12
+#define MAX_FRAMES 16
 #define MAX_LOCALS 16
 #define MAX_OPERANDS 8
 
@@ -262,6 +263,12 @@ static uint8_t read_line(char *buf){
     uint8_t len=0;
     for(;;){
         char c=cpm_conin();
+        
+        /* force lowercase */
+        if (c >= 'A' && c <= 'Z')
+            c = c - 'A' + 'a';
+
+
         if(c=='\r'||c=='\n'){
             crlf();
             buf[len]=0;
@@ -620,9 +627,9 @@ static void dict_init(void){
 static uint8_t encode_a2(char c)
 {
     /* A2 table for v1–v3 */
-    const char *a2 = " \n0123456789.,!?_#'\"/\\-:()";
-    for (uint8_t i = 0; a2[i]; i++) {
-        if (a2[i] == c)
+    //const char *a2 = " \n0123456789.,!?_#'\"/\\-:()";
+    for (uint8_t i = 0; zalph[2][i]; i++) {
+        if (zalph[2][i] == c)
             return i;
     }
     return 0; /* space */
@@ -636,8 +643,8 @@ void encode_zchars(const char *s, uint8_t zchars[6])
         char c = *s++;
 
         /* force lowercase */
-        if (c >= 'A' && c <= 'Z')
-            c = c - 'A' + 'a';
+        //if (c >= 'A' && c <= 'Z')
+        //    c = c - 'A' + 'a';
 
         if (c >= 'a' && c <= 'z') {
             zchars[zi++] = (c - 'a') + 6;
@@ -651,7 +658,7 @@ void encode_zchars(const char *s, uint8_t zchars[6])
         }
     }
 
-    /* pad with spaces (A2 space = shift 5 + 0, but Inform pads with 5) */
+    /* pad with 5 */
     while (zi < 6)
         zchars[zi++] = 5;
 }
@@ -1143,7 +1150,7 @@ static void step(void){
         uint8_t type=(op>>4)&3;
         uint8_t oc=op&0x0F;
         uint8_t indirect = (oc == OP1_LOAD);
-        if(type!=OP_OMIT) operands[0]=read_operand(type, indirect);
+        if(type!=OP_OMIT) operands[0]=read_operand(type, 0);
         switch(oc){
         case OP1_JUMP:
             pc+=(int16_t)operands[0]-2;
@@ -1465,6 +1472,13 @@ static void step(void){
         value++;
         set_var(operands[0],(uint16_t)value,1);
         branch(value>(int16_t)operands[1]);
+        break;
+    }
+    case OPV_DEC_CHK:{
+        int16_t value = (int16_t)get_var(operands[0],1);
+        value--;
+        set_var(operands[0],(uint16_t)value,1);
+        branch(value<(int16_t)operands[1]);
         break;
     }
     default:
