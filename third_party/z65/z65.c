@@ -85,12 +85,15 @@
 #define OPV_AND             0x09
 #define OPV_OR              0x08
 #define OPV_NOT             0x0B
+#define OPV_INSERT_OBJ      0x0E
 #define OPV_LOADW           0x0F
 #define OPV_STORE           0x0D
 #define OPV_CALL_EXT        0x20
 #define OPV_PUSH            0x28
 #define OPV_PULL            0x29
 #define OPV_LOADB           0x50
+#define OPV_ADD             0x54
+#define OPV_SUB             0x55
 #define OPV_MUL             0x56            
 
 /* ============================================================
@@ -164,7 +167,7 @@ static uint16_t sp;
 static CallFrame frames[MAX_FRAMES];
 static uint8_t fp;
 
-static FCB storyFile;
+//static FCB storyFile;
 static uint8_t dma[128];
 static uint8_t hdr[128];
 
@@ -301,15 +304,15 @@ static uint8_t read_line(char *buf){
 
 static void load_page(Page *p,uint16_t page){
     uint16_t record=page<<2;
-    storyFile.r = record;
+    cpm_fcb.r = record;
     for(uint8_t i=0;i<4;i++){
         cpm_set_dma(&dma);
-        cpm_read_random(&storyFile);
+        cpm_read_random(&cpm_fcb);
         for(uint8_t j=0;j<128;j++) {
             p->data[(i<<7)+j]=dma[j];
         }
         record++;
-        storyFile.r = record;
+        cpm_fcb.r = record;
     }
     p->page=page;
     p->valid=1;
@@ -725,17 +728,20 @@ static uint8_t tokenize(char *in, uint16_t parse_buf, uint16_t text_buf)
     uint8_t i=0;
 
     uint8_t max_tok = zm_read8(parse_buf);
-
+    
     if (max_tok > MAX_TOKENS) max_tok = MAX_TOKENS; 
 
-    // Clear buffer
-    for(uint8_t i=0; i<max_tok; i++) {
+    /*for(uint8_t i=0; i<max_tok; i++) {
         uint16_t addr = parse_buf+2+(i<<2);
         zm_write8(addr,0);
         zm_write8(addr+1,0);
         zm_write8(addr+2,0);
         zm_write8(addr+3,0);
+        print_hex(i);
     }
+
+    cpm_printstring("parse buffer cleared");
+    crlf();*/
 
     while(in[i] && count<max_tok){
         while(is_sep(in[i])) i++;
@@ -1406,17 +1412,16 @@ static void step(void){
     case OPV_SREAD: {
         uint16_t text = operands[0];
         uint16_t parse = operands[1];
-        //cpm_printstring("Text addr: ");
-        //print_hex(text);
-        //cpm_printstring(" Parse addr: ");
-        //print_hex(parse);
-        //crlf();
+        /*cpm_printstring("Text addr: ");
+        print_hex(text);
+        cpm_printstring(" Parse addr: ");
+        print_hex(parse);
+        crlf();*/
         char line[INPUT_MAX]={0};
         uint8_t len = read_line(line);
-
         uint8_t max = zm_read8(text);
         if(len>max) len=max;
-
+        
         //zm_write8(text+1,len);
         for(uint8_t i=0;i<len;i++)
             zm_write8(text+1+i,line[i]);
@@ -1467,6 +1472,14 @@ static void step(void){
     case OPV_MUL:
         store_result((int16_t)operands[0]*(int16_t)operands[1], indirect);
         break;
+    case OPV_ADD:   
+        store_result((int16_t)operands[0]+(int16_t)operands[1], 
+                         indirect); 
+        break;
+    case OPV_SUB:   
+        store_result((int16_t)operands[0]-(int16_t)operands[1], 
+                         indirect); 
+        break;
     case OPV_INC_CHK:{
         int16_t value = (int16_t)get_var(operands[0],1);
         value++;
@@ -1481,6 +1494,11 @@ static void step(void){
         branch(value<(int16_t)operands[1]);
         break;
     }
+    case OP2_INSERT_OBJ:
+        obj_insert(operands[0], operands[1]);
+        break;
+
+
     default:
         crlf();
         printi(op); 
@@ -1501,21 +1519,25 @@ int main(int agrv, char **argv){
     crlf();
    
     // Get story filename from commandline
-    for(uint8_t i=0; i<11; i++)
-        storyFile.f[i]=cpm_fcb.f[i];
-    storyFile.dr = cpm_fcb.dr;
+    //for(uint8_t i=0; i<11; i++)
+    //    storyFile.f[i]=cpm_fcb.f[i];
+    //storyFile.dr = cpm_fcb.dr;
 
-    if(cpm_open_file(&storyFile))
+    cpm_fcb.cr = 0;
+    if(cpm_open_file(&cpm_fcb))
         fatal("Could not open input file!");
 
     cpm_set_dma(&hdr);
-    cpm_read_sequential(&storyFile);
+    cpm_read_sequential(&cpm_fcb);
     
     if(hdr[HDR_VERSION] != 3)
         fatal("Only v3 files are supported!");
 
     dynamic_size=(hdr[HDR_STAT]<<8)|hdr[HDR_STAT+1];
-    
+    cpm_printstring("Dynamic size: ");
+    print_hex(dynamic_size);
+    crlf();
+
     for(uint16_t i=0; i<DYNAMIC_MEM_MAX; i++)
         dynamic_mem[i] = 0;
 
@@ -1527,7 +1549,7 @@ int main(int agrv, char **argv){
     for(uint16_t i=128;i<dynamic_size;i++){
         if((i&0x7f)==0) {
             cpm_set_dma(&dma);
-            cpm_read_sequential(&storyFile);
+            cpm_read_sequential(&cpm_fcb);
         }
         dynamic_mem[i]=dma[i&0x7f];
     }
