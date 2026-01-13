@@ -202,6 +202,8 @@ static uint8_t rng_enabled = 1;
 
 static void z_ret(uint16_t v);
 
+static uint8_t w_addr;
+
 #ifdef DEBUG
 static long int opcnt = 0;
 #endif
@@ -924,6 +926,123 @@ static void obj_put_prop(uint8_t obj, uint8_t prop, uint16_t val){
     }
 }
 
+void write_save_sector(FCB *fcb, void *dmaptr) {
+    cpm_set_dma(dmaptr);
+    cpm_write_sequential(fcb);
+}
+
+void add_save_byte(FCB *fcb, uint8_t *writeSector, uint8_t data) {
+    writeSector[w_addr++] = data;
+    if(w_addr == 0x80) {
+        write_save_sector(fcb, writeSector);
+        w_addr = 0;
+    }
+}
+
+void write_zero_block(FCB *fcb, uint8_t *writeSector, uint8_t zero_cnt) {
+    add_save_byte(fcb, writeSector, 0x00);
+    add_save_byte(fcb, writeSector, zero_cnt);
+}
+// Saving and loading
+uint8_t save_game(void) {
+    FCB saveFile;
+    char filename_input[14];
+    
+    filename_input[0]=13;
+    filename_input[1]=0;
+
+    cpm_printstring("Enter filename: ");
+    cpm_readline((uint8_t *)filename_input);
+    crlf();
+
+    cpm_set_dma(&saveFile);
+    if(!cpm_parse_filename(&filename_input[2])) {
+        return 0;
+    }
+
+    if(cpm_make_file(&saveFile)) {
+        return 0;
+    }
+
+    // Write delta of dynamic ram to file
+    uint16_t cmp_addr = 0;
+    cpm_fcb.r = 0;
+    uint8_t writeSector[128];
+    w_addr=0;
+    uint8_t zero_cnt=0;
+    while(cmp_addr < dynamic_size) {
+        // Read a sector from file
+        uint8_t checkSector[128];
+        cpm_set_dma(&checkSector);
+        cpm_read_random(&cpm_fcb);
+        cpm_fcb.r++;
+        // Compare byte by byte with ram
+        for(uint8_t i=0; i<128; i++) {
+            uint8_t diff = dynamic_mem[cmp_addr] ^ checkSector[i];
+            if(diff) {
+                if(zero_cnt != 0) {
+                    write_zero_block(&saveFile, writeSector, zero_cnt);
+                    zero_cnt = 0;
+                }
+                add_save_byte(&saveFile, writeSector, diff);
+                
+                cpm_printstring("Difference found at addr ");
+                print_hex(cmp_addr);
+                cpm_printstring(" dyn: ");
+                print_hex(dynamic_mem[cmp_addr]);
+                cpm_printstring(" file: ");
+                print_hex(checkSector[i]);
+                crlf();
+            } else {
+                zero_cnt++;
+                if(zero_cnt == 0x80) {
+                    write_zero_block(&saveFile, writeSector, zero_cnt);
+                    zero_cnt = 0;
+                }
+            }
+            cmp_addr++;
+        }
+    }
+    // Write trailing zeroes
+    if(zero_cnt != 0) {
+        write_zero_block(&saveFile, writeSector, zero_cnt);
+    }
+
+    // Write frames
+    add_save_byte(&saveFile, writeSector, fp);
+    for(uint8_t i = 0; i<fp; i++) {
+        add_save_byte(&saveFile, writeSector, (frames[i].return_pc >> 24));
+        add_save_byte(&saveFile, writeSector, (frames[i].return_pc >> 16));
+        add_save_byte(&saveFile, writeSector, (frames[i].return_pc >> 8));
+        add_save_byte(&saveFile, writeSector, (frames[i].return_pc & 0xFF));
+
+        add_save_byte(&saveFile, writeSector, frames[i].store_var );
+        
+        add_save_byte(&saveFile, writeSector, frames[i].num_locals);
+        for(uint8_t j = 0; j< MAX_LOCALS; j++) {
+            add_save_byte(&saveFile, writeSector, (frames[i].locals[j] >> 8));
+            add_save_byte(&saveFile, writeSector, (frames[i].locals[j] & 0xFF));
+        }
+         
+        add_save_byte(&saveFile, writeSector, (frames[i].saved_sp >> 8));
+        add_save_byte(&saveFile, writeSector, (frames[i].saved_sp & 0xFF));
+
+    }
+    // Write stack
+    add_save_byte(&saveFile, writeSector, (sp>>8));
+    add_save_byte(&saveFile, writeSector, (sp & 0xFF));
+    for(uint16_t i = 0; i<sp; i++) {
+        add_save_byte(&saveFile, writeSector, (stack[i] >> 8));
+        add_save_byte(&saveFile, writeSector, (stack[i] & 0xFF));
+    }
+    // Perform a final write if necessary
+    if(w_addr != 0) {
+        write_save_sector(&saveFile, writeSector);
+    }    
+    cpm_close_file(&saveFile);
+
+    return 1;
+}
 
 /* ============================================================
  * Execution
@@ -1281,6 +1400,9 @@ static void step(void){
             break;
 
         case OP0_SAVE:
+            branch(save_game());
+            break;
+
         case OP0_RESTORE:
             branch(0); /* always fail */
             break;
