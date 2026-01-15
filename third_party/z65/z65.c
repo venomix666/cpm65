@@ -964,6 +964,8 @@ uint8_t save_game(void) {
         return 0;
     }
 
+    uint16_t enc = 0;
+
     // Write delta of dynamic ram to file
     uint16_t cmp_addr = 0;
     cpm_fcb.r = 0;
@@ -977,15 +979,16 @@ uint8_t save_game(void) {
         cpm_read_random(&cpm_fcb);
         cpm_fcb.r++;
         // Compare byte by byte with ram
-        for(uint8_t i=0; i<128; i++) {
+        for(uint8_t i=0; i<((dynamic_size-cmp_addr)>128?128:(dynamic_size-cmp_addr)); i++) {
             uint8_t diff = dynamic_mem[cmp_addr] ^ checkSector[i];
             if(diff) {
                 if(zero_cnt != 0) {
                     write_zero_block(&saveFile, writeSector, zero_cnt);
+                    enc += zero_cnt;
                     zero_cnt = 0;
                 }
                 add_save_byte(&saveFile, writeSector, diff);
-                
+                enc++;
                 cpm_printstring("Difference found at addr ");
                 print_hex(cmp_addr);
                 cpm_printstring(" dyn: ");
@@ -997,6 +1000,7 @@ uint8_t save_game(void) {
                 zero_cnt++;
                 if(zero_cnt == 0x80) {
                     write_zero_block(&saveFile, writeSector, zero_cnt);
+                    enc+=zero_cnt;
                     zero_cnt = 0;
                 }
             }
@@ -1006,10 +1010,23 @@ uint8_t save_game(void) {
     // Write trailing zeroes
     if(zero_cnt != 0) {
         write_zero_block(&saveFile, writeSector, zero_cnt);
+        enc+=zero_cnt;
     }
-
+    /*cpm_printstring("Encoded bytes: ");
+    printi(enc);
+    crlf();
+    cpm_printstring("Address: ");
+    printi(cmp_addr);
+    crlf();
+    cpm_printstring("Dynamic size: ");
+    printi(dynamic_size);
+    crlf();*/
+    
     // Write frames
     add_save_byte(&saveFile, writeSector, fp);
+    cpm_printstring("Save fp: ");
+    print_hex(fp);
+    crlf();
     for(uint8_t i = 0; i<fp; i++) {
         add_save_byte(&saveFile, writeSector, (frames[i].return_pc >> 24));
         add_save_byte(&saveFile, writeSector, (frames[i].return_pc >> 16));
@@ -1031,19 +1048,178 @@ uint8_t save_game(void) {
     // Write stack
     add_save_byte(&saveFile, writeSector, (sp>>8));
     add_save_byte(&saveFile, writeSector, (sp & 0xFF));
+    cpm_printstring("Save sp: ");
+    print_hex(sp);
+    crlf();
     for(uint16_t i = 0; i<sp; i++) {
         add_save_byte(&saveFile, writeSector, (stack[i] >> 8));
         add_save_byte(&saveFile, writeSector, (stack[i] & 0xFF));
     }
+    
+    // Save PC
+    add_save_byte(&saveFile, writeSector, (pc >> 24));
+    add_save_byte(&saveFile, writeSector, (pc >> 16));
+    add_save_byte(&saveFile, writeSector, (pc >> 8));
+    add_save_byte(&saveFile, writeSector, (pc & 0xFF));
+
     // Perform a final write if necessary
+    
     if(w_addr != 0) {
         write_save_sector(&saveFile, writeSector);
-    }    
+    }
+      
     cpm_close_file(&saveFile);
 
     return 1;
 }
 
+uint8_t read_save_byte(FCB *fcb, uint8_t *restoreSector) {
+    uint8_t data;
+    // Refill buffer if out of data
+    if(w_addr == 0x80) {
+        cpm_set_dma(restoreSector);
+        cpm_read_random(fcb);
+        fcb->r++;
+        w_addr = 0;
+//        cpm_printstring("Save file read performed");
+    }
+    
+    data = restoreSector[w_addr++];
+    cpm_printstring("Read save byte: ");
+    print_hex(data);
+    crlf(); 
+    return data;
+}
+
+uint8_t read_game_byte(uint8_t *r_addr) {
+    uint8_t data;
+    // Refill buffer if out of data
+    if((*r_addr) == 0x80) {
+        cpm_set_dma(&dma);
+        cpm_read_random(&cpm_fcb);
+        cpm_fcb.r++;
+        (*r_addr) = 0;
+        //cpm_printstring("Game file read performed");
+        //crlf();
+    }
+    
+    data = dma[(*r_addr)];
+    (*r_addr) = (*r_addr) + 1;
+    //cpm_printstring("Read game byte: ");
+    //print_hex(data);
+    //crlf();
+    return data;
+}
+
+
+uint8_t restore_game(void) {
+    FCB saveFile;
+    char filename_input[14];
+    
+    filename_input[0]=13;
+    filename_input[1]=0;
+
+    cpm_printstring("Enter filename: ");
+    cpm_readline((uint8_t *)filename_input);
+    crlf();
+
+    cpm_set_dma(&saveFile);
+    if(!cpm_parse_filename(&filename_input[2])) {
+        return 0;
+    }
+
+    saveFile.cr = 0;
+    if(cpm_open_file(&saveFile)) {
+        return 0;
+    }
+    saveFile.r = 0;
+
+    // Restore dynamic ram from file
+    uint16_t cmp_addr = 0;
+    
+    cpm_fcb.r = 0;
+    uint8_t restoreSector[128];
+    uint8_t gameFileSector[128];
+    //uint8_t zero_cnt;
+
+    w_addr = 0x80; // trigger sector read
+    uint8_t r_addr = 0x80;
+    uint8_t gameFileAddr = 0x80;
+    
+    // Restore dynamic memory
+    while(cmp_addr < dynamic_size) {
+            
+        uint8_t data = read_save_byte(&saveFile, restoreSector);
+           
+        if(data == 0x00) {
+            uint8_t zero_cnt = read_save_byte(&saveFile, restoreSector);
+            
+            for(uint8_t i=0; i<zero_cnt; i++) {
+                dynamic_mem[cmp_addr++] = read_game_byte(&gameFileAddr);
+                cpm_printstring("addr: ");
+                print_hex(cmp_addr-1);
+                cpm_printstring(" data: ");
+                print_hex(dynamic_mem[cmp_addr-1]);
+                crlf();
+            }
+        } else {
+            dynamic_mem[cmp_addr++] = read_game_byte(&gameFileAddr) ^ data;
+            cpm_printstring("Addr: ");
+            print_hex(cmp_addr-1);
+            cpm_printstring(" data: ");
+            print_hex(dynamic_mem[cmp_addr-1]);
+            crlf();
+        }
+    }
+    cpm_printstring("Dynamic memory loaded");
+    
+    // Restore frames
+    fp = read_save_byte(&saveFile, restoreSector); // Frame pointer
+    cpm_printstring("fp: ");
+    print_hex(fp);
+    crlf();
+    for(uint8_t i=0; i<fp; i++) {
+        frames[i].return_pc = 
+            ((uint32_t)read_save_byte(&saveFile, restoreSector) << 24) |
+            ((uint32_t)read_save_byte(&saveFile, restoreSector) << 16) |
+            ((uint32_t)read_save_byte(&saveFile, restoreSector) << 8) |
+             (uint32_t)read_save_byte(&saveFile, restoreSector);
+        frames[i].store_var = read_save_byte(&saveFile, restoreSector);
+        frames[i].num_locals = read_save_byte(&saveFile, restoreSector);
+        for(uint8_t j=0; j<MAX_LOCALS; j++) {
+            frames[i].locals[j] = (read_save_byte(&saveFile, restoreSector)<<8)|
+                                  read_save_byte(&saveFile, restoreSector);
+        }
+        frames[i].saved_sp = (read_save_byte(&saveFile, restoreSector) << 8) |
+                             read_save_byte(&saveFile, restoreSector);
+        cpm_printstring("Frame ");
+        printi(i);
+        cpm_printstring(" loaded. Return PC: ");
+        print_hex(frames[i].return_pc);
+        crlf();
+    }
+    cpm_printstring("Frames loaded");
+    // Restore stack
+    sp = (read_save_byte(&saveFile, restoreSector) << 8) |
+         read_save_byte(&saveFile, restoreSector);
+    cpm_printstring("sp loaded: ");
+    print_hex(sp);
+    for(uint16_t i=0; i<sp; i++) {
+        stack[i] = (read_save_byte(&saveFile, restoreSector) << 8) |
+                   read_save_byte(&saveFile, restoreSector);
+    }
+    cpm_printstring("Stack loaded");
+   
+    // Restore PC
+    pc = ((uint32_t)read_save_byte(&saveFile, restoreSector) << 24) |
+         ((uint32_t)read_save_byte(&saveFile, restoreSector) << 16) |
+         ((uint32_t)read_save_byte(&saveFile, restoreSector) << 8) |
+          (uint32_t)read_save_byte(&saveFile, restoreSector);
+        
+
+    cpm_close_file(&saveFile);
+    return 1;
+}
 /* ============================================================
  * Execution
  * ============================================================
@@ -1404,7 +1580,7 @@ static void step(void){
             break;
 
         case OP0_RESTORE:
-            branch(0); /* always fail */
+            branch(restore_game());
             break;
 
         case OP0_RESTART:
