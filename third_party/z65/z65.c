@@ -227,7 +227,7 @@ static void spc(void)
     cpm_conout(' ');
 }
 
-
+#ifdef DEBUG
 static void print_hex(uint16_t val)
 {
     cpm_printstring("0x");
@@ -249,17 +249,12 @@ static void print_hex_32(uint32_t val)
        else cpm_conout(nibble-10 + 'A'); 
     }
 }
-
-
-static void printx(const char *s)
-{
-    cpm_printstring(s);
-    crlf();
-}
+#endif
 
 static void fatal(const char *s)
 {
-    printx(s);
+    cpm_printstring(s);
+    crlf();
     cpm_warmboot();
 }
 
@@ -368,7 +363,7 @@ static uint16_t zm_read16(uint32_t a){
 static void zm_write8(uint32_t a,uint8_t v){
     if(a>=dynamic_size) {
         crlf();
-        print_hex(a);
+        //print_hex(a);
         fatal(" Illegal write address");
     
     }
@@ -1387,11 +1382,13 @@ static void step(void){
         }
         
         default:
+            #ifdef DEBUG
             crlf();
             printi(op);
             spc();
             print_hex(pc);
             spc();
+            #endif
             fatal(" - Non-implemented opcode!!!"); 
         }
         return;
@@ -1493,10 +1490,12 @@ static void step(void){
             break;
         }
         default:
+            #ifdef DEBUG
             crlf();
             printi(op);
             spc();
-            print_hex(pc); 
+            print_hex(pc);
+            #endif 
             fatal(" - Non-implemented opcode!!!");
         }
         return;
@@ -1558,8 +1557,10 @@ static void step(void){
             branch(1);
             break;
         default:
+            #ifdef DEBUG
             crlf();
             printi(op);
+            #endif
             fatal(" - Non-implemented opcode!!!");
         }
         return;
