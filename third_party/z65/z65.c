@@ -1,4 +1,10 @@
-/* Z-machine v3 interpreter for CP/M-65 */
+/* z65 - Z-machine v3 interpreter for CP/M-65
+ *
+ * Copyright (C) 2026 by Henrik Löfgren
+ *
+ * BSD-2 License. See LICENSE file in root directory.
+ *
+ */
 
 #include <stdint.h>
 #include <cpm.h>
@@ -10,7 +16,7 @@
  * ============================================================
  */
 
-/* 2OP */
+// 2OP
 #define OP2_JE 0x01
 #define OP2_JL 0x02
 #define OP2_JG 0x03
@@ -36,7 +42,7 @@
 #define OP2_GET_PROP_ADDR 0x12
 #define OP2_GET_NEXT_PROP 0x13
 
-/* 1OP opcodes (v1–v3) */
+// 1OP
 #define OP1_JZ 0x00
 #define OP1_GET_SIBLING 0x01
 #define OP1_GET_CHILD 0x02
@@ -54,7 +60,7 @@
 #define OP1_LOAD 0x0E
 #define OP1_NOT 0x0F
 
-/* 0OP */
+// 0OP
 #define OP0_RTRUE 0x00
 #define OP0_RFALSE 0x01
 #define OP0_PRINT 0x02
@@ -69,7 +75,7 @@
 #define OP0_NEW_LINE 0x0B
 #define OP0_VERIFY 0x0D
 
-/* VAR */
+// VAR
 #define OPV_CALL 0x00
 #define OPV_JE 0x01
 #define OPV_JL 0x02
@@ -154,7 +160,6 @@ typedef struct {
  * ============================================================
  */
 
-// static uint8_t dynamic_mem[DYNAMIC_MEM_MAX];
 static uint8_t *dynamic_mem;
 static uint16_t dynamic_size;
 
@@ -169,7 +174,6 @@ static uint16_t sp;
 static CallFrame frames[MAX_FRAMES];
 static uint8_t fp;
 
-// static FCB storyFile;
 static uint8_t dma[128];
 static uint8_t hdr[128];
 
@@ -495,7 +499,7 @@ static void branch(uint8_t cond)
 }
 
 /* ============================================================
- * ZSCII output (minimal)
+ * ZSCII output
  * ============================================================
  */
 
@@ -558,7 +562,12 @@ static void print_num(int16_t v)
 	printi(v);
 }
 
-// Dictionary
+/* ============================================================
+ * Dictionary
+ * ============================================================
+ */
+
+
 static void dict_init(void)
 {
 	dict_addr = hdr[HDR_DICT] << 8 | hdr[HDR_DICT + 1];
@@ -624,7 +633,10 @@ uint16_t dict_lookup(const char *word)
 	return 0;
 }
 
-// Tokenization
+/* ============================================================
+ * Tokenization
+ * ============================================================
+ */
 
 static uint8_t is_sep(char c)
 {
@@ -677,7 +689,10 @@ static uint8_t tokenize(char *in, uint16_t parse_buf, uint16_t text_buf)
 	return count;
 }
 
-// Objects
+/* ============================================================
+ * Objects
+ * ============================================================
+ */
 
 static uint16_t obj_addr(uint8_t obj)
 {
@@ -827,7 +842,10 @@ static void obj_put_prop(uint8_t obj, uint8_t prop, uint16_t val)
 	}
 }
 
-// Saving and loading
+/* ============================================================
+ * Saving and Restoring
+ * ============================================================
+ */
 
 void write_save_sector(FCB *fcb, void *dmaptr)
 {
@@ -1077,6 +1095,7 @@ uint8_t restore_game(void)
 	cpm_close_file(&saveFile);
 	return 1;
 }
+
 /* ============================================================
  * Execution
  * ============================================================
@@ -1150,7 +1169,7 @@ static void step(void)
 	crlf();
 #endif
 
-	/* -------- 2OP -------- */
+	// -------- 2OP -------- 
 	if (op < 0x80) {
 		uint8_t t1 = (op & 0x40) ? OP_VAR : OP_SMALL;
 		uint8_t t2 = (op & 0x20) ? OP_VAR : OP_SMALL;
@@ -1298,7 +1317,7 @@ static void step(void)
 		return;
 	}
 
-	/* -------- 1OP -------- */
+	// -------- 1OP --------
 	if (op < 0xB0) {
 		uint8_t type = (op >> 4) & 3;
 		uint8_t oc = op & 0x0F;
@@ -1408,7 +1427,7 @@ static void step(void)
 		}
 		return;
 	}
-	/* 0OP */
+	// -------- 0OP -------- 
 	if (op < 0xC0) {
 		switch (op & 0x0F) {
 			case OP0_RTRUE:
@@ -1471,7 +1490,7 @@ static void step(void)
 		}
 		return;
 	}
-	/* -------- VAR -------- */
+	// -------- VAR --------
 	uint8_t var_opcode = op & 0x1f;
 	uint8_t indirect = (var_opcode == OPV_PULL);
 
@@ -1643,7 +1662,7 @@ static void step(void)
 }
 
 /* ============================================================
- * Entry
+ * Main
  * ============================================================
  */
 
@@ -1702,6 +1721,7 @@ int main(int agrv, char **argv)
 	abbrev_table = 0;
 	abbrev_base = (hdr[HDR_ABBR] << 8) | hdr[HDR_ABBR + 1];
 
+    // Start game execution
 	for (;;)
 		step();
 }
