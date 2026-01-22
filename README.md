@@ -622,6 +622,17 @@ END OF FILE
  OK
 ```
 
+### The Z-machine interpreter
+
+z65 is Z-machine interpeter for version 3 Z-machine adventures, written from scratch for CP/M-65. The freeware adventure moonglow is supplied with it to have something to run, but is has been tested with many of the classic version 3 Infocom games (Zork I-III, Mini-Zork, Planetfall, Hollywood Hijinx etc.). It has however not been extensively tested and almost certainly has a lot of bugs, so please report any issues you find.
+
+Saving and restoring games is supported if the games implement support for it. No check is made to ensure that the file being restored is for the correct game.
+
+Usage: Run it with the game file you want to run as a command line argument:
+```
+A> Z65 MOONGLOW.Z3
+```
+
 ### Utilities
 
 `bin/cpmemu` contains a basic CP/M-65 user mode emulator and debugger. It'll run
