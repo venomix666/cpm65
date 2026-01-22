@@ -597,15 +597,16 @@ static void print_num(int16_t v)
     uint8_t i = 0;
 
     if (v < 0) {
-	putc('-');
-	v = -v;
+	    putc('-');
+	    v = -v;
     }
-    do {
+    printi(v);
+ /*   do {
 	buf[i++] = '0' + (v % 10);
 	v /= 10;
     } while (v);
     while (i--)
-	putc(buf[i]);
+	putc(buf[i]);*/
 }
 
 // Dictionary
@@ -1244,6 +1245,17 @@ static uint16_t rng_next(void)
     return rng_state;
 }
 
+static void unimplemented(uint8_t opcode) {
+#ifdef DEBUG
+    crlf();
+    printi(op);
+    spc();
+    print_hex(pc);
+    spc();
+#endif
+    fatal("Non-implemented opcode");
+}
+
 static void step(void)
 {
     uint8_t op = zm_read8(pc++);
@@ -1538,14 +1550,8 @@ static void step(void)
 	    break;
 	}
 	default:
-#ifdef DEBUG
-	    crlf();
-	    printi(op);
-	    spc();
-	    print_hex(pc);
-#endif
-	    fatal(" - Non-implemented opcode!!!");
-	}
+	    unimplemented(op);
+    }
 	return;
     }
     /* 0OP */
@@ -1607,12 +1613,8 @@ static void step(void)
 	    branch(1);
 	    break;
 	default:
-#ifdef DEBUG
-	    crlf();
-	    printi(op);
-#endif
-	    fatal(" - Non-implemented opcode!!!");
-	}
+	    unimplemented(op);
+    }
 	return;
     }
     /* -------- VAR -------- */
@@ -1627,180 +1629,163 @@ static void step(void)
     switch (var_opcode) {
     case OPV_CALL_EXT:
     case OPV_CALL: {
-	if (operands[0] == 0) {
+	    if (operands[0] == 0) {
+	        uint8_t sv = zm_read8(pc++);
+	        set_var(sv, 0, indirect);
+	        return;
+	    }
+
+	    CallFrame *f = &frames[fp++];
+
 	    uint8_t sv = zm_read8(pc++);
-	    set_var(sv, 0, indirect);
-	    return;
-	}
+	    f->store_var = sv;
+	    f->return_pc = pc;
+	    f->saved_sp = sp;
 
-	CallFrame *f = &frames[fp++];
+	    uint32_t addr = (uint32_t)operands[0] << 1;
+	    f->num_locals = zm_read8(addr++);
 
-	uint8_t sv = zm_read8(pc++);
-	f->store_var = sv;
-	f->return_pc = pc;
-	f->saved_sp = sp;
+	    for (uint8_t i = 0; i < f->num_locals; i++) {
+	        f->locals[i] = zm_read16(addr);
+	        addr += 2;
+	    }
 
-	uint32_t addr = (uint32_t)operands[0] << 1;
-	f->num_locals = zm_read8(addr++);
+	    /* overwrite locals with arguments */
+	    uint8_t argc = operand_count - 1;
+	    if (argc > f->num_locals)
+	        argc = f->num_locals;
+	    for (uint8_t i = 0; i < argc; i++) {
+	        f->locals[i] = operands[i + 1];
+	    }
 
-	for (uint8_t i = 0; i < f->num_locals; i++) {
-	    f->locals[i] = zm_read16(addr);
-	    addr += 2;
-	}
-
-	/* overwrite locals with arguments */
-	uint8_t argc = operand_count - 1;
-	if (argc > f->num_locals)
-	    argc = f->num_locals;
-	for (uint8_t i = 0; i < argc; i++) {
-	    f->locals[i] = operands[i + 1];
-	}
-
-	pc = addr; // + 2 * f->num_locals;
-	break;
+	    pc = addr; // + 2 * f->num_locals;
+	    break;
     }
     case OPV_JE:
-	if (operand_count == 2)
-	    branch(operands[0] == operands[1]);
-	else if (operand_count == 3)
-	    branch(operands[0] == operands[1] || operands[0] == operands[2]);
-	else if (operand_count == 4)
-	    branch(operands[0] == operands[1] || operands[0] == operands[2] ||
-		   operands[0] == operands[3]);
-	break;
+	    if (operand_count == 2)
+	        branch(operands[0] == operands[1]);
+	    else if (operand_count == 3)
+	        branch(operands[0] == operands[1] || 
+                   operands[0] == operands[2]);
+	    else if (operand_count == 4)
+	        branch(operands[0] == operands[1] || 
+                   operands[0] == operands[2] ||
+		           operands[0] == operands[3]);
+	    break;
     case OPV_JL:
-	branch((int16_t)operands[0] < (int16_t)operands[1]);
-	break;
+	    branch((int16_t)operands[0] < (int16_t)operands[1]);
+	    break;
     case OPV_JG:
-	branch((int16_t)operands[0] > (int16_t)operands[1]);
-	break;
+	    branch((int16_t)operands[0] > (int16_t)operands[1]);
+	    break;
     case OPV_TEST:
-	branch((operands[0] & operands[1]) == operands[1]);
-	break;
+	    branch((operands[0] & operands[1]) == operands[1]);
+	    break;
     case OPV_STOREW:
-	zm_write8(operands[0] + 2 * operands[1], operands[2] >> 8);
-	zm_write8(operands[0] + 2 * operands[1] + 1, operands[2]);
+	    zm_write8(operands[0] + 2 * operands[1], operands[2] >> 8);
+	    zm_write8(operands[0] + 2 * operands[1] + 1, operands[2]);
 	break;
-
     case OPV_STOREB:
-	zm_write8(operands[0] + operands[1], operands[2]);
-	break;
-
+	    zm_write8(operands[0] + operands[1], operands[2]);
+	    break;
     case OPV_STORE:
-	set_var(operands[0], operands[1], 0);
-	break;
-
+	    set_var(operands[0], operands[1], 0);
+    	break;
     case OPV_PRINT_CHAR:
-	putc((char)operands[0]);
-	break;
-
+	    putc((char)operands[0]);
+	    break;
     case OPV_PRINT_NUM:
-	print_num((int16_t)operands[0]);
-	break;
-
+	    print_num((int16_t)operands[0]);
+	    break;
     case OPV_PUSH:
-	push(operands[0]);
-	break;
-
+	    push(operands[0]);
+    	break;
     case OPV_PULL: {
-	uint16_t value = pop();
-
-	set_var(operands[0], value, 1);
-
-	break;
+	    uint16_t value = pop();
+	    set_var(operands[0], value, 1);
+	    break;
     }
     case OPV_SREAD: {
-	uint16_t text = operands[0];
-	uint16_t parse = operands[1];
-	/*cpm_printstring("Text addr: ");
-        print_hex(text);
-        cpm_printstring(" Parse addr: ");
-        print_hex(parse);
-        crlf();*/
-	char line[INPUT_MAX] = { 0 };
-	uint8_t len = read_line(line);
-	uint8_t max = zm_read8(text);
-	if (len > max)
-	    len = max;
+	    uint16_t text = operands[0];
+	    uint16_t parse = operands[1];
+		char line[INPUT_MAX] = { 0 };
+	    uint8_t len = read_line(line);
+	    uint8_t max = zm_read8(text);
+	    if (len > max)
+	        len = max;
 
-	//zm_write8(text+1,len);
-	for (uint8_t i = 0; i < len; i++)
-	    zm_write8(text + 1 + i, line[i]);
+	    //zm_write8(text+1,len);
+	    for (uint8_t i = 0; i < len; i++)
+	        zm_write8(text + 1 + i, line[i]);
 
-	zm_write8(text + 1 + len, 0);
+	    zm_write8(text + 1 + len, 0);
 
-	tokenize(line, parse, text);
-	/*cpm_printstring("RAW PARSE: ");
-        for(uint8_t i=0; i<6; i++) {
-            print_hex(zm_read8(parse+i));
-            spc();
-        }*/
-	break;
+	    tokenize(line, parse, text);
+	   	break;
     }
     case OPV_PUT_PROP:
-	obj_put_prop((uint8_t)operands[0], (uint8_t)operands[1], operands[2]);
-	break;
+	    obj_put_prop((uint8_t)operands[0], (
+                     uint8_t)operands[1], operands[2]);
+	    break;
     case OPV_OR:
-	store_result(operands[0] | operands[1], indirect);
-	break;
+	    store_result(operands[0] | operands[1], indirect);
+	    break;
     case OPV_AND:
-	store_result(operands[0] & operands[1], indirect);
-	break;
+	    store_result(operands[0] & operands[1], indirect);
+	    break;
     case OPV_RANDOM: {
-	int16_t range = (int16_t)operands[0];
-	if (range == 0) {
-	    rng_state = (uint16_t)pc;
-	    store_result(0, indirect);
-	    break;
-	}
-	if (range < 0) {
-	    rng_state = (uint16_t)(-range);
-	    store_result(0, indirect);
-	    break;
-	}
+	    int16_t range = (int16_t)operands[0];
+	    if (range == 0) {
+	        rng_state = (uint16_t)pc;
+	        store_result(0, indirect);
+	        break;
+	    }
+	    if (range < 0) {
+	        rng_state = (uint16_t)(-range);
+	        store_result(0, indirect);
+	        break;
+	    }
 
-	uint16_t r = rng_next();
-	uint16_t result = (r % range) + 1;
-	store_result(result, indirect);
-	break;
+	    uint16_t r = rng_next();
+	    uint16_t result = (r % range) + 1;
+	    store_result(result, indirect);
+	    break;
     }
     case OPV_LOADW:
-	store_result(zm_read16(operands[0] + 2 * operands[1]), indirect);
-	break;
+	    store_result(zm_read16(operands[0] + 2 * operands[1]), indirect);
+	    break;
     case OPV_LOADB:
-	store_result(zm_read8(operands[0] + operands[1]), indirect);
-	break;
+	    store_result(zm_read8(operands[0] + operands[1]), indirect);
+	    break;
     case OPV_MUL:
-	store_result((int16_t)operands[0] * (int16_t)operands[1], indirect);
-	break;
+	    store_result((int16_t)operands[0] * (int16_t)operands[1], indirect);
+	    break;
     case OPV_ADD:
-	store_result((int16_t)operands[0] + (int16_t)operands[1], indirect);
-	break;
+	    store_result((int16_t)operands[0] + (int16_t)operands[1], indirect);
+	    break;
     case OPV_SUB:
-	store_result((int16_t)operands[0] - (int16_t)operands[1], indirect);
-	break;
+	    store_result((int16_t)operands[0] - (int16_t)operands[1], indirect);
+	    break;
     case OPV_INC_CHK: {
-	int16_t value = (int16_t)get_var(operands[0], 1);
-	value++;
-	set_var(operands[0], (uint16_t)value, 1);
-	branch(value > (int16_t)operands[1]);
-	break;
+	    int16_t value = (int16_t)get_var(operands[0], 1);
+	    value++;
+	    set_var(operands[0], (uint16_t)value, 1);
+	    branch(value > (int16_t)operands[1]);
+	    break;
     }
     case OPV_DEC_CHK: {
-	int16_t value = (int16_t)get_var(operands[0], 1);
-	value--;
-	set_var(operands[0], (uint16_t)value, 1);
-	branch(value < (int16_t)operands[1]);
-	break;
+	    int16_t value = (int16_t)get_var(operands[0], 1);
+	    value--;
+	    set_var(operands[0], (uint16_t)value, 1);
+	    branch(value < (int16_t)operands[1]);
+	    break;
     }
     case OP2_INSERT_OBJ:
-	obj_insert(operands[0], operands[1]);
-	break;
+	    obj_insert(operands[0], operands[1]);
+	    break;
 
     default:
-	crlf();
-	printi(op);
-	fatal(" - Non-implemented opcode!!!");
+        unimplemented(op);
     }
 }
 
