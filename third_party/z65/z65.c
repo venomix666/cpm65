@@ -350,7 +350,6 @@ static uint16_t zm_read16(uint32_t a)
 static void zm_write8(uint32_t a, uint8_t v)
 {
 	if (a >= dynamic_size) {
-		crlf();
 		fatal(" Illegal write address");
 	}
 	dynamic_mem[a] = v;
@@ -881,7 +880,6 @@ uint8_t save_game(void)
 
 	cpm_printstring("Enter filename: ");
 	cpm_readline((uint8_t *)filename_input);
-	crlf();
 
 	cpm_set_dma(&saveFile);
 	if (!cpm_parse_filename(&filename_input[2])) {
@@ -964,7 +962,6 @@ uint8_t save_game(void)
 		add_save_byte(&saveFile, writeSector, (stack[i] >> 8));
 		add_save_byte(&saveFile, writeSector, (stack[i] & 0xFF));
 	}
-	crlf();
 	// Save PC
 	add_save_byte(&saveFile, writeSector, (pc >> 24));
 	add_save_byte(&saveFile, writeSector, (pc >> 16));
@@ -1023,7 +1020,6 @@ uint8_t restore_game(void)
 
 	cpm_printstring("Enter filename: ");
 	cpm_readline((uint8_t *)filename_input);
-	crlf();
 
 	cpm_set_dma(&saveFile);
 	if (!cpm_parse_filename(&filename_input[2])) {
@@ -1080,7 +1076,6 @@ uint8_t restore_game(void)
 		}
 		frames[i].saved_sp = (read_save_byte(&saveFile, restoreSector) << 8) |
 							 read_save_byte(&saveFile, restoreSector);
-		crlf();
 	}
 	// Restore stack
 	sp = (read_save_byte(&saveFile, restoreSector) << 8) |
