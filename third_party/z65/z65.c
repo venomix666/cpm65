@@ -532,7 +532,10 @@ static void print_zstring(uint32_t addr)
 				alphabet = 0;
 			} else if (c >= 6) {
 				putc(zalph[alphabet][c - 6]);
-				alphabet = 0;
+				// Also print \r when \n is printed
+                if(alphabet == 2 && c == 7)
+                    putc('\r');
+                alphabet = 0;
 			} else if (c == 4) {
 				alphabet = 1;
 			} else if (c == 5) {
