@@ -10,6 +10,7 @@ from config import (
     BIG_SCREEN_APPS,
     PASCAL_APPS,
     FORTH_APPS,
+    Z65_APPS,
 )
 
 llvmcfile(
@@ -73,7 +74,7 @@ mkcpmfs(
     bootimage=".+bios_shuffled",
     size=143360,
     items={} | SCREEN_APPS | SCREEN_APPS_SRCS | BIG_SCREEN_APPS | PASCAL_APPS
-             | FORTH_APPS,
+             | FORTH_APPS | Z65_APPS,
 )
 
 

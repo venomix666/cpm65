@@ -11,6 +11,7 @@ from config import (
     BIG_SCREEN_APPS,
     PASCAL_APPS,
     FORTH_APPS,
+    Z65_APPS,
 )
 
 COMMODORE_ITEMS = (
@@ -128,7 +129,8 @@ mkcpmfs(
     | SCREEN_APPS
     | BIG_SCREEN_APPS
     | PASCAL_APPS
-    | FORTH_APPS,
+    | FORTH_APPS
+    | Z65_APPS,
 )
 
 mkcpmfs(
@@ -149,7 +151,8 @@ mkcpmfs(
     | SCREEN_APPS
     | BIG_SCREEN_APPS
     | PASCAL_APPS
-    | FORTH_APPS,
+    | FORTH_APPS
+    | Z65_APPS,
 )
 
 mkcpmfs(
@@ -173,7 +176,8 @@ mkcpmfs(
     | SCREEN_APPS
     | BIG_SCREEN_APPS
     | PASCAL_APPS
-    | FORTH_APPS,
+    | FORTH_APPS
+    | Z65_APPS,
 )
 
 mkimd(name="diskimage-k1013", src=".+rawdiskimage-k1013")

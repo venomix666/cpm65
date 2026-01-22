@@ -11,6 +11,7 @@ from config import (
     BIG_SCREEN_APPS,
     PASCAL_APPS,
     FORTH_APPS,
+    Z65_APPS,
 )
 
 llvmrawprogram(
@@ -38,7 +39,8 @@ mkcpmfs(
     | SCREEN_APPS
     | BIG_SCREEN_APPS
     | PASCAL_APPS
-    | FORTH_APPS,
+    | FORTH_APPS
+    | Z65_APPS,
 )
 
 simplerule(
