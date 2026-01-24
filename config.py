@@ -71,6 +71,11 @@ FORTH_APPS = {
     "0:triangle.frt": "cpmfs+triangle_frt_cpm",
 }
 
+Z65_APPS = {
+    "0:z65.com": "third_party/z65",
+    "0:moonglow.z3": "third_party/z65/moonglow.z3",
+}
+
 SERIAL_APPS = {
     "0:xrecv.com": "apps+xrecv",
     "0:xsend.com": "apps+xsend",

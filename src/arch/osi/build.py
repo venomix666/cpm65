@@ -10,6 +10,7 @@ from config import (
     BIG_SCREEN_APPS,
     PASCAL_APPS,
     FORTH_APPS,
+    Z65_APPS,
 )
 
 # ----------------------------------------------------------------------------
@@ -207,7 +208,8 @@ mkcpmfs(
     | PASCAL_APPS
     | MINIMAL_APPS_SRCS
     | BIG_APPS_SRCS
-    | FORTH_APPS,
+    | FORTH_APPS
+    | Z65_APPS,
 )
 
 mkcpmfs(
@@ -246,7 +248,8 @@ mkcpmfs(
     | PASCAL_APPS
     | MINIMAL_APPS_SRCS
     | BIG_APPS_SRCS
-    | FORTH_APPS,
+    | FORTH_APPS
+    | Z65_APPS,
 )
 
 mkcpmfs(name="osif-b_rawdiskimage", format="osi8", size=128 * 1848, items={})
@@ -358,7 +361,8 @@ mkcpmfs(
     | BIG_APPS_SRCS
     | SCREEN_APPS_SRCS
     | BIG_SCREEN_APPS
-    | FORTH_APPS,
+    | FORTH_APPS
+    | Z65_APPS,
 )
 
 mkcpmfs(

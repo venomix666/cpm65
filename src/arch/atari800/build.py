@@ -11,6 +11,7 @@ from config import (
     BIG_SCREEN_APPS,
     PASCAL_APPS,
     FORTH_APPS,
+    Z65_APPS,
 )
 
 llvmclibrary(name="headers", hdrs={"atari800.inc": "./atari800.inc"})
@@ -122,7 +123,8 @@ mkcpmfs(
     | SCREEN_APPS_SRCS
     | BIG_SCREEN_APPS
     | PASCAL_APPS
-    | FORTH_APPS,
+    | FORTH_APPS
+    | Z65_APPS,
 )
 
 simplerule(
@@ -172,7 +174,8 @@ mkcpmfs(
     | SCREEN_APPS_SRCS
     | BIG_SCREEN_APPS
     | PASCAL_APPS
-    | FORTH_APPS,
+    | FORTH_APPS
+    | Z65_APPS,
 )
 
 simplerule(
