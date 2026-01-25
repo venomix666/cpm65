@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <cpm.h>
 #include "lib/printi.h"
+#include "lib/screen.h"
 #include "zmalloc.h"
 
 /* ============================================================
@@ -82,6 +83,7 @@
 #define OPV_JG 0x03
 #define OPV_DEC_CHK 0x04
 #define OPV_INC_CHK 0x05
+#define OPV_JIN 0x06
 #define OPV_TEST 0x07
 #define OPV_STOREW 0x21
 #define OPV_STOREB 0x22
@@ -92,7 +94,8 @@
 #define OPV_RANDOM 0x27
 #define OPV_AND 0x09
 #define OPV_OR 0x08
-#define OPV_NOT 0x0B
+#define OPV_TEST_ATTR 0x0A
+#define OPV_SET_ATTR 0x0B
 #define OPV_INSERT_OBJ 0x0E
 #define OPV_LOADW 0x0F
 #define OPV_STORE 0x0D
@@ -110,6 +113,7 @@
  */
 
 #define HDR_VERSION 0x00
+#define HDR_FLAGS 0x01
 #define HDR_PC 0x06
 #define HDR_DICT 0x08
 #define HDR_OBJ 0x0A
@@ -134,7 +138,8 @@
 #define INPUT_MAX 80
 #define MAX_TOKENS 16
 
-// #define DEBUG
+#define DEBUG 0
+#define STATUS 1
 
 /* ============================================================
  * Structures
@@ -208,7 +213,9 @@ static void z_ret(uint16_t v);
 
 static uint8_t w_addr;
 
-#ifdef DEBUG
+static uint8_t status = 0;
+
+#if DEBUG
 static long int opcnt = 0;
 #endif
 
@@ -232,7 +239,7 @@ static void spc(void)
 	cpm_conout(' ');
 }
 
-#ifdef DEBUG
+#if DEBUG
 static void print_hex(uint16_t val)
 {
 	cpm_printstring("0x");
@@ -386,7 +393,7 @@ static uint16_t get_var(uint8_t v, uint8_t indirect)
 	}
 	uint16_t a = (hdr[HDR_GLB] << 8) + hdr[HDR_GLB + 1] + 2 * (v - 16);
 	uint16_t ret_data = zm_read16(a);
-#ifdef DEBUG
+#if DEBUG
 	cpm_printstring("Read global variable ");
 	print_hex(v);
 	cpm_printstring(" data: ");
@@ -1137,21 +1144,71 @@ static uint16_t rng_next(void)
 
 static void unimplemented(uint8_t opcode)
 {
-#ifdef DEBUG
 	crlf();
-	printi(op);
+	printi(opcode);
+#if DEBUG
 	spc();
-	print_hex(pc);
-	spc();
+    print_hex(pc);
 #endif
-	fatal("Non-implemented opcode");
+	fatal(" Non-implemented opcode");
 }
+
+#if STATUS
+static void update_status(void) {
+    if(!status) return;
+
+    uint8_t save_x, save_y;
+    screen_getcursor(&save_x, &save_y);
+    screen_setcursor(0, 0);
+    screen_setstyle(1);
+
+    // Score/turn mode
+    uint16_t room = get_var(16,0);
+    uint16_t v1 = get_var(17,0);
+    uint16_t v2 = get_var(18,0);
+   	
+    if (room) {
+		uint16_t entry = obj_addr(room);
+		uint16_t prop_table = zm_read16(entry + 7);
+		uint8_t name_len = zm_read8(prop_table);
+		if (name_len != 0)
+			print_zstring(prop_table + 1);
+    }
+    spc();
+    if((hdr[HDR_FLAGS] & 0x02) == 0) {
+        // Score/turn mode
+        cpm_printstring("Score: ");
+        printi(v1);
+        cpm_printstring(" Turns: ");
+        printi(v2);
+    } else {
+        // Time mode
+        if(v1<10)
+            putc('0');
+        printi(v1);
+        putc(':');
+        if(v2<10)
+            putc('0');
+        printi(v2);
+    }
+    uint8_t xsize, ysize,x,y;
+    screen_getsize(&xsize, &ysize);
+    screen_getcursor(&x,&y);
+    while(x<=xsize) {
+        putc(' ');
+        x++;
+    }
+    screen_setstyle(0);
+    screen_setcursor(save_x, save_y);
+ 
+}
+#endif
 
 static void step(void)
 {
 	uint8_t op = zm_read8(pc++);
 
-#ifdef DEBUG
+#if DEBUG
 	printi(opcnt++);
 	spc();
 	cpm_printstring("OP: ");
@@ -1303,7 +1360,7 @@ static void step(void)
 			}
 
 			default:
-#ifdef DEBUG
+#if DEBUG
 				crlf();
 				printi(op);
 				spc();
@@ -1580,7 +1637,10 @@ static void step(void)
 			uint16_t text = operands[0];
 			uint16_t parse = operands[1];
 			char line[INPUT_MAX] = { 0 };
-			uint8_t len = read_line(line);
+#if STATUS
+            update_status();
+#endif
+            uint8_t len = read_line(line);
 			uint8_t max = zm_read8(text);
 			if (len > max)
 				len = max;
@@ -1589,7 +1649,9 @@ static void step(void)
 				zm_write8(text + 1 + i, line[i]);
 
 			zm_write8(text + 1 + len, 0);
-
+#if STATUS
+            update_status();
+#endif
 			tokenize(line, parse, text);
 			break;
 		}
@@ -1650,8 +1712,21 @@ static void step(void)
 			branch(value < (int16_t)operands[1]);
 			break;
 		}
-		case OP2_INSERT_OBJ:
+		case OPV_INSERT_OBJ:
 			obj_insert(operands[0], operands[1]);
+			break;
+
+        case OPV_JIN: {
+			uint8_t parent;
+			parent = obj_parent(operands[0]);
+			branch(parent == operands[1]);
+			break;
+		}   
+        case OPV_TEST_ATTR:
+			branch(obj_test_attr(operands[0], operands[1]));
+			break;
+        case OPV_SET_ATTR:
+			obj_set_attr(operands[0], operands[1]);
 			break;
 
 		default:
@@ -1666,7 +1741,16 @@ static void step(void)
 
 int main(int agrv, char **argv)
 {
-	cpm_printstring("z65 - Z-machine v3 interpreter");
+#if STATUS
+    // Initate screen driver for status bar if available
+    if(screen_init()) {
+        status = 1;
+        screen_clear();
+        screen_setcursor(0,1);
+    }
+#endif
+
+    cpm_printstring("z65 - Z-machine v3 interpreter");
 	crlf();
 	crlf();
 
