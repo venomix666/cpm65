@@ -74,6 +74,7 @@
 #define OP0_POP 0x09
 #define OP0_QUIT 0x0A
 #define OP0_NEW_LINE 0x0B
+#define OP0_SHOW_STATUS 0x0C
 #define OP0_VERIFY 0x0D
 
 // VAR
@@ -1532,7 +1533,11 @@ static void step(void)
 			case OP0_NEW_LINE:
 				crlf();
 				break;
-
+            case OP0_SHOW_STATUS:
+#if STATUS
+                update_status();
+#endif
+                break;
 			case OP0_QUIT:
 				cpm_warmboot();
 				break;
