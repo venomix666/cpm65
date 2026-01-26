@@ -928,7 +928,7 @@ uint8_t save_game(void)
 				enc++;
 			} else {
 				zero_cnt++;
-				if (zero_cnt == 0x80) {
+				if (zero_cnt == 0xff) {
 					write_zero_block(&saveFile, writeSector, zero_cnt);
 					enc += zero_cnt;
 					zero_cnt = 0;
