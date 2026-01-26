@@ -128,8 +128,7 @@
  */
 
 #define PAGE_SIZE 512
-#define NUM_PAGES 2
-#define DYNAMIC_MEM_MAX 12000
+#define NUM_PAGES 8
 
 #define STACK_SIZE 512
 #define MAX_FRAMES 16
