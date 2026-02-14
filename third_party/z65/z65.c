@@ -594,7 +594,7 @@ static uint8_t encode_a2(char c)
 {
 	for (uint8_t i = 0; zalph[2][i]; i++) {
 		if (zalph[2][i] == c)
-			return i;
+			return i+6;
 	}
 	return 0;
 }
@@ -666,8 +666,9 @@ static uint8_t tokenize(char *in, uint16_t parse_buf, uint16_t text_buf)
 		max_tok = MAX_TOKENS;
 
 	while (in[i] && count < max_tok) {
-		while (is_sep(in[i]))
+		while (in[i] == ' ')
 			i++;
+
 		if (!in[i])
 			break;
 
@@ -676,13 +677,21 @@ static uint8_t tokenize(char *in, uint16_t parse_buf, uint16_t text_buf)
 		uint8_t dict_len = 0;
 		uint8_t word_len = 0;
 
-		while (in[i] && !is_sep(in[i])) {
-			if (dict_len < 7)
-				word[dict_len++] = in[i];
-			word_len++;
-			i++;
-		}
+		if(is_sep(in[i])) {
+            word[0] = in[i];
+            word_len = 1;
+            i++;
+        } else {
+            while (in[i] && in[i] != ' ') {
+                if(is_sep(in[i]))
+                    break;
 
+			    if (dict_len < 7)
+				    word[dict_len++] = in[i];
+			    word_len++;
+			    i++;
+		    }
+        }
 		uint16_t dict = dict_lookup(word);
 
 		uint16_t entry = parse_buf + 2 + (count << 2);
